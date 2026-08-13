@@ -120,6 +120,34 @@ func (s *Server) markError(r *http.Request, accountID string, err error) {
 	_ = s.st.UpdateAccount(r.Context(), store.Account{ID: accountID, Status: store.StatusError, LastError: err.Error()})
 }
 
+func (s *Server) handleUpdateAccount(w http.ResponseWriter, r *http.Request) {
+	a, err := s.st.GetAccount(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var in struct {
+		CodingCapable  *bool `json:"coding_capable"`
+		ExposedToAgent *bool `json:"exposed_to_agent"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if in.CodingCapable != nil {
+		a.CodingCapable = *in.CodingCapable
+	}
+	if in.ExposedToAgent != nil {
+		a.ExposedToAgent = *in.ExposedToAgent
+	}
+	if err := s.st.UpdateAccount(r.Context(), *a); err != nil {
+		writeErr(w, http.StatusInternalServerError, "update failed")
+		return
+	}
+	perms, _ := s.st.ListPermissions(r.Context(), a.ID)
+	writeJSON(w, http.StatusOK, toAccountDTO(*a, perms))
+}
+
 func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	a, err := s.st.GetAccount(r.Context(), r.PathValue("id"))
 	if err != nil {

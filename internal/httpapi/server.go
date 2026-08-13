@@ -48,6 +48,7 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("DELETE /api/servers/{id}", s.handleDeleteServer)
 	api.HandleFunc("POST /api/servers/{id}/accounts", s.handleCreateAccount)
 	api.HandleFunc("POST /api/accounts/{id}/provision", s.handleProvisionAccount)
+	api.HandleFunc("PUT /api/accounts/{id}", s.handleUpdateAccount)
 	api.HandleFunc("DELETE /api/accounts/{id}", s.handleDeleteAccount)
 	api.HandleFunc("GET /api/accounts/{id}/permissions", s.handleListPermissions)
 	api.HandleFunc("PUT /api/accounts/{id}/permissions", s.handleSetPermissions)
