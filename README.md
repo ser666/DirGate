@@ -33,7 +33,7 @@
 
 - **Web UI / REST API**：添加服务器、建/删账户、配目录权限、标记编码能力与暴露。
 - **MCP 服务**：`list_exposed_accounts` 工具，向 agent 返回被暴露账户的 `host / ssh_port / username / password / directories`。
-- **SSH 执行器**：用 root 凭据在服务器上真实执行 `useradd`、`chpasswd`、`setfacl`（或 group 后端）。
+- **SSH 执行器**：用 root 凭据在服务器上真实执行 `useradd`、`chpasswd`、`setfacl`（ACL 后端）。
 - **SQLite 存储**：账户密码用 AES-256-GCM 加密落库；管理员密码用 argon2id 哈希。
 
 ## 环境变量
@@ -45,8 +45,9 @@
 | `SAL_MASTER_KEY` | 否 | 自动生成 | 32 字节 hex 主密钥；缺省时生成到 `$SAL_DATA_DIR/master.key` |
 | `SAL_MCP_TOKEN` | **是** | — | MCP 端点的静态 Bearer token |
 | `SAL_ADMIN_USER` | 否 | `admin` | 管理员用户名 |
-| `SAL_ADMIN_PASSWORD` | 否 | 自动生成 | 首次运行的管理员密码；缺省时打印随机密码到日志 |
-| `SAL_PERMISSION_BACKEND` | 否 | `acl` | 权限后端：`acl` 或 `group` |
+| `SAL_ADMIN_PASSWORD` | 否 | 自动生成 | 首次运行的管理员密码；缺省时写入 `$SAL_DATA_DIR/admin-password.txt`（0600） |
+| `SAL_TLS_CERT` | 否 | — | TLS 证书路径（与 `SAL_TLS_KEY` 成对设置） |
+| `SAL_TLS_KEY` | 否 | — | TLS 私钥路径（与 `SAL_TLS_CERT` 成对设置） |
 
 ## 构建与运行
 
@@ -54,17 +55,17 @@
 # 构建单二进制
 go build -o server-agent-link ./cmd/server-agent-link
 
-# 运行（首次运行自动创建管理员，缺省密码时打印到日志）
+# 运行（首次运行自动创建管理员，缺省密码时写入 admin-password.txt）
 SAL_MCP_TOKEN=devtoken \
 SAL_MASTER_KEY=$(openssl rand -hex 32) \
 ./server-agent-link
 ```
 
-首次运行若未设 `SAL_ADMIN_PASSWORD`，日志会打印生成的随机管理员密码。之后访问 `http://localhost:8080/login` 登录。
+首次运行若未设 `SAL_ADMIN_PASSWORD`，随机密码会写入 `$SAL_DATA_DIR/admin-password.txt`（0600，不落日志）。之后访问 `http://localhost:8080/login` 登录。生产环境建议设置 `SAL_TLS_CERT`/`SAL_TLS_KEY` 启用 HTTPS。
 
 ## ACL 前置条件
 
-权限后端 `acl`（默认）要求目标服务器满足：
+权限后端为 `acl`（唯一支持的后端），要求目标服务器满足：
 
 1. 安装 `acl` 包（Debian/Ubuntu：`apt-get install acl`）。
 2. 被授权目录所在文件系统需以 `acl` 选项挂载（`mount -o remount,acl /` 或 `/etc/fstab` 加 `acl`）。
@@ -111,9 +112,12 @@ sshpass -p '<password>' ssh -o StrictHostKeyChecking=accept-new \
 
 - 账户密码与服务器 root 密码在数据库中经 **AES-256-GCM**（nonce‖密文）加密，密钥来自 `SAL_MASTER_KEY`（或 `master.key` 文件，0600 权限）。
 - 管理员密码用 **argon2id** 哈希，绝不落明文。
-- 会话用 **HMAC-SHA256 签名 cookie**（`SameSite=Strict`、`HttpOnly`），登录限流 5 次/分钟/IP。
-- SSH 首次连接采用 **TOFU** 主机密钥校验（记录 SHA256 指纹），防止中间人。
+- 会话用 **HMAC-SHA256 签名 cookie**（`SameSite=Strict`、`HttpOnly`，启用 TLS 时加 `Secure`），登录限流 5 次/分钟/IP（原子计数，不信任 `X-Forwarded-For`）。
+- 状态变更接口启用 **double-submit CSRF**（`sal_csrf` cookie + `X-CSRF-Token` 头）。
+- SSH 首次连接采用 **TOFU** 主机密钥校验（记录 SHA256 指纹），防止中间人；换主机/重装可 `reset_host_key` 复位。
 - MCP 端点暴露明文凭据，必须通过 `SAL_MCP_TOKEN` 强鉴权，并仅在内网/受信环境暴露。
+
+更完整的使用与运维说明见 [docs/使用说明.md](docs/使用说明.md)。
 
 ## 测试
 
