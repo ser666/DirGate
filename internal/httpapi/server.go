@@ -2,10 +2,12 @@ package httpapi
 
 import (
 	"context"
+	"html/template"
 	"net/http"
 
 	"serveragentlink/internal/sshx"
 	"serveragentlink/internal/store"
+	"serveragentlink/internal/web"
 )
 
 // userExecutor 是 sshx.Executor 的可注入接口，便于测试用 fake 替身。
@@ -22,10 +24,15 @@ type Server struct {
 	exec       userExecutor
 	mcpHandler http.Handler
 	backend    string
+	templates  *template.Template
 }
 
 func New(st *store.Store, key []byte, adminUser string, exec userExecutor, mcpHandler http.Handler, backend string) *Server {
-	return &Server{st: st, key: key, adminUser: adminUser, exec: exec, mcpHandler: mcpHandler, backend: backend}
+	tmpl, err := web.ParseTemplates()
+	if err != nil {
+		panic(err) // 内嵌模板固定有效，Task 13 已测试可解析可执行
+	}
+	return &Server{st: st, key: key, adminUser: adminUser, exec: exec, mcpHandler: mcpHandler, backend: backend, templates: tmpl}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -50,5 +57,10 @@ func (s *Server) Handler() http.Handler {
 	if s.mcpHandler != nil {
 		mux.Handle("/mcp", s.mcpHandler)
 	}
+
+	mux.Handle("GET /static/", http.FileServer(http.FS(web.FS)))
+	mux.HandleFunc("GET /login", s.handleLoginPage)
+	mux.Handle("GET /{$}", s.requireAuth(http.HandlerFunc(s.handleServersPage)))
+	mux.Handle("GET /servers/{id}", s.requireAuth(http.HandlerFunc(s.handleServerPage)))
 	return mux
 }
