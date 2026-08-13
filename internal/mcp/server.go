@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"crypto/subtle"
+	"encoding/json"
 	"net/http"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -71,7 +72,10 @@ func bearerAuth(token string, next http.Handler) http.Handler {
 	expected := []byte("Bearer " + token)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), expected) != 1 {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			// 显式 JSON 响应（http.Error 会返回 text/plain，令严格 MCP 客户端误判）。
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
 			return
 		}
 		next.ServeHTTP(w, r)

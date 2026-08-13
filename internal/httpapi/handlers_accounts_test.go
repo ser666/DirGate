@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -23,13 +22,13 @@ func (f *fakeExec) CreateUser(ctx context.Context, host string, port int, rootUs
 	f.created++
 	return "fp", nil
 }
-func (f *fakeExec) DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) error {
+func (f *fakeExec) DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error) {
 	f.deleted++
-	return nil
+	return "fp", nil
 }
-func (f *fakeExec) UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) error {
+func (f *fakeExec) UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error) {
 	f.updated = &spec
-	return nil
+	return "fp", nil
 }
 
 type failExec struct{ err error }
@@ -37,11 +36,11 @@ type failExec struct{ err error }
 func (f *failExec) CreateUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error) {
 	return "", f.err
 }
-func (f *failExec) DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) error {
-	return f.err
+func (f *failExec) DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error) {
+	return "", f.err
 }
-func (f *failExec) UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) error {
-	return f.err
+func (f *failExec) UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error) {
+	return "", f.err
 }
 
 func TestCreateAccountProvision(t *testing.T) {
@@ -49,12 +48,10 @@ func TestCreateAccountProvision(t *testing.T) {
 	fx := &fakeExec{}
 	srv.exec = fx
 	h := srv.Handler()
-	cookie := login(t, srv, h)
 
 	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
 	body := `{"username":"alice","password":"alicepw","coding_capable":true,"exposed_to_agent":true,"permissions":[{"path":"/data/a","mode":"rw"}]}`
-	req := httptest.NewRequest("POST", "/api/servers/"+sv.ID+"/accounts", bytes.NewReader([]byte(body)))
-	req.AddCookie(cookie)
+	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/accounts", []byte(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -74,12 +71,10 @@ func TestUpdateAccountFlags(t *testing.T) {
 	srv := newTestServer(t)
 	srv.exec = &fakeExec{}
 	h := srv.Handler()
-	cookie := login(t, srv, h)
 	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
 
 	body := `{"username":"alice","password":"pw","coding_capable":false,"exposed_to_agent":false,"permissions":[]}`
-	req := httptest.NewRequest("POST", "/api/servers/"+sv.ID+"/accounts", bytes.NewReader([]byte(body)))
-	req.AddCookie(cookie)
+	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/accounts", []byte(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -89,8 +84,7 @@ func TestUpdateAccountFlags(t *testing.T) {
 	json.Unmarshal(rec.Body.Bytes(), &created)
 
 	// 翻转两个标记，确认持久化且可通过 ListExposedAccounts 查到。
-	req = httptest.NewRequest("PUT", "/api/accounts/"+created.ID, bytes.NewReader([]byte(`{"coding_capable":true,"exposed_to_agent":true}`)))
-	req.AddCookie(cookie)
+	req = authedRequest(t, srv, h, "PUT", "/api/accounts/"+created.ID, []byte(`{"coding_capable":true,"exposed_to_agent":true}`))
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -108,11 +102,9 @@ func TestProvisionFailureMarksError(t *testing.T) {
 	fx := &failExec{err: fmt.Errorf("boom")}
 	srv.exec = fx
 	h := srv.Handler()
-	cookie := login(t, srv, h)
 	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
 	body := `{"username":"bob","password":"pw","permissions":[]}`
-	req := httptest.NewRequest("POST", "/api/servers/"+sv.ID+"/accounts", bytes.NewReader([]byte(body)))
-	req.AddCookie(cookie)
+	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/accounts", []byte(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -128,11 +120,9 @@ func TestProvisionFailurePreservesFlags(t *testing.T) {
 	srv := newTestServer(t)
 	srv.exec = &failExec{err: fmt.Errorf("boom")}
 	h := srv.Handler()
-	cookie := login(t, srv, h)
 	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
 	body := `{"username":"alice","password":"pw","coding_capable":true,"exposed_to_agent":true,"permissions":[]}`
-	req := httptest.NewRequest("POST", "/api/servers/"+sv.ID+"/accounts", bytes.NewReader([]byte(body)))
-	req.AddCookie(cookie)
+	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/accounts", []byte(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -150,20 +140,17 @@ func TestSetPermissionsPushesRevocation(t *testing.T) {
 	fx := &fakeExec{}
 	srv.exec = fx
 	h := srv.Handler()
-	cookie := login(t, srv, h)
 	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
 
 	body := `{"username":"alice","password":"pw","permissions":[{"path":"/data/a","mode":"rw"}]}`
-	req := httptest.NewRequest("POST", "/api/servers/"+sv.ID+"/accounts", bytes.NewReader([]byte(body)))
-	req.AddCookie(cookie)
+	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/accounts", []byte(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	var created accountDTO
 	json.Unmarshal(rec.Body.Bytes(), &created)
 
 	// 改权限为仅 /data/b，应推送到服务器并撤销 /data/a。
-	req = httptest.NewRequest("PUT", "/api/accounts/"+created.ID+"/permissions", bytes.NewReader([]byte(`[{"path":"/data/b","mode":"ro"}]`)))
-	req.AddCookie(cookie)
+	req = authedRequest(t, srv, h, "PUT", "/api/accounts/"+created.ID+"/permissions", []byte(`[{"path":"/data/b","mode":"ro"}]`))
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -184,19 +171,16 @@ func TestDeleteAccountFailureKeepsRecord(t *testing.T) {
 	srv := newTestServer(t)
 	srv.exec = &failExec{err: fmt.Errorf("ssh down")}
 	h := srv.Handler()
-	cookie := login(t, srv, h)
 	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
 
 	body := `{"username":"alice","password":"pw","permissions":[]}`
-	req := httptest.NewRequest("POST", "/api/servers/"+sv.ID+"/accounts", bytes.NewReader([]byte(body)))
-	req.AddCookie(cookie)
+	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/accounts", []byte(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	var created accountDTO
 	json.Unmarshal(rec.Body.Bytes(), &created)
 
-	req = httptest.NewRequest("DELETE", "/api/accounts/"+created.ID, nil)
-	req.AddCookie(cookie)
+	req = authedRequest(t, srv, h, "DELETE", "/api/accounts/"+created.ID, nil)
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadGateway {
@@ -206,5 +190,32 @@ func TestDeleteAccountFailureKeepsRecord(t *testing.T) {
 	accs, _ := srv.st.ListAccounts(context.Background(), sv.ID)
 	if len(accs) != 1 {
 		t.Fatalf("account should be kept, got %d", len(accs))
+	}
+}
+
+func TestDeleteAccountPersistsHostKey(t *testing.T) {
+	srv := newTestServer(t)
+	srv.exec = &failExec{err: fmt.Errorf("boom")} // 建户失败 → HostKey 保持空
+	h := srv.Handler()
+	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
+
+	body := `{"username":"alice","password":"pw","permissions":[]}`
+	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/accounts", []byte(body))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	var created accountDTO
+	json.Unmarshal(rec.Body.Bytes(), &created)
+
+	// 改用成功的 executor 删户，应把观察到的指纹回写（完成 TOFU 固定）。
+	srv.exec = &fakeExec{}
+	req = authedRequest(t, srv, h, "DELETE", "/api/accounts/"+created.ID, nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete code=%d body=%s", rec.Code, rec.Body)
+	}
+	got, _ := srv.st.GetServer(context.Background(), sv.ID)
+	if got.HostKey != "fp" {
+		t.Fatalf("host key not persisted after delete: %q", got.HostKey)
 	}
 }

@@ -5,11 +5,30 @@
 {{template "nav" .}}
 <main>
 <h1>服务器</h1>
-<button hx-get="/servers/new" hx-target="#form">添加服务器</button>
-<div id="form"></div>
+
+<h2>添加服务器</h2>
+<form id="add-server">
+  <input name="name" placeholder="名称" required>
+  <input name="host" placeholder="主机 IP/域名" required>
+  <input name="ssh_port" type="number" placeholder="22" value="22">
+  <input name="root_user" placeholder="root" value="root">
+  <input name="root_password" type="password" placeholder="root 密码" required>
+  <button type="submit">添加</button>
+</form>
+
 <ul>
 {{range .Servers}}<li><a href="/servers/{{.ID}}">{{.Name}} ({{.Host}})</a></li>{{end}}
 </ul>
 </main>
+<script>
+salSubmit('add-server', '/api/servers', function (fd) {
+  return {
+    name: fd.get('name'), host: fd.get('host'),
+    ssh_port: parseInt(fd.get('ssh_port') || '22', 10),
+    root_user: fd.get('root_user') || 'root',
+    root_password: fd.get('root_password')
+  };
+});
+</script>
 </body>
 </html>{{end}}

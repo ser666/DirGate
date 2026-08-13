@@ -13,26 +13,26 @@ import (
 // userExecutor 是 sshx.Executor 的可注入接口，便于测试用 fake 替身。
 type userExecutor interface {
 	CreateUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error)
-	DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) error
-	UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) error
+	DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error)
+	UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error)
 }
 
 type Server struct {
-	st         *store.Store
-	key        []byte
-	adminUser  string
-	exec       userExecutor
-	mcpHandler http.Handler
-	backend    string
-	templates  *template.Template
+	st            *store.Store
+	key           []byte
+	adminUser     string
+	exec          userExecutor
+	mcpHandler    http.Handler
+	secureCookies bool
+	templates     *template.Template
 }
 
-func New(st *store.Store, key []byte, adminUser string, exec userExecutor, mcpHandler http.Handler, backend string) *Server {
+func New(st *store.Store, key []byte, adminUser string, exec userExecutor, mcpHandler http.Handler, secureCookies bool) *Server {
 	tmpl, err := web.ParseTemplates()
 	if err != nil {
 		panic(err) // 内嵌模板固定有效，Task 13 已测试可解析可执行
 	}
-	return &Server{st: st, key: key, adminUser: adminUser, exec: exec, mcpHandler: mcpHandler, backend: backend, templates: tmpl}
+	return &Server{st: st, key: key, adminUser: adminUser, exec: exec, mcpHandler: mcpHandler, secureCookies: secureCookies, templates: tmpl}
 }
 
 func (s *Server) Handler() http.Handler {

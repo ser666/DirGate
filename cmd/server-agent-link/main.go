@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -35,7 +36,6 @@ func main() {
 	}
 	defer st.Close()
 
-	sshx.SetBackend(cfg.PermissionBackend)
 	exec := &sshx.Executor{}
 
 	ctx := context.Background()
@@ -48,20 +48,35 @@ func main() {
 		log.Fatalf("mcp: %v", err)
 	}
 
-	srv := httpapi.New(st, key, cfg.AdminUser, exec, mcpHandler, cfg.PermissionBackend)
-	log.Printf("listening on %s", cfg.ListenAddr)
+	secureCookies := cfg.TLSCert != ""
+	srv := httpapi.New(st, key, cfg.AdminUser, exec, mcpHandler, secureCookies)
+
+	if cfg.TLSCert != "" {
+		log.Printf("listening on %s (TLS)", cfg.ListenAddr)
+		log.Fatal(http.ListenAndServeTLS(cfg.ListenAddr, cfg.TLSCert, cfg.TLSKey, srv.Handler()))
+	}
+	log.Printf("listening on %s (plaintext HTTP — set SAL_TLS_CERT/SAL_TLS_KEY for production)", cfg.ListenAddr)
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, srv.Handler()))
 }
 
-// resolveKey 返回 32 字节主密钥：优先 env，其次数据目录 keyfile（无则生成并写 0600）。
-// 若 env 已设置但非法（hex/长度错误），返回错误而非静默回退，避免旧密文无法解密。
+// resolveKey 返回 32 字节主密钥：优先 env，其次数据目录 keyfile。
+// 仅在「真·首次运行」（既无 keyfile 也无数据库）时才生成新密钥；
+// 否则一律报错，避免用新密钥覆盖旧密钥导致历史密文永久不可解密。
 func resolveKey(cfg *config.Config) ([]byte, error) {
 	if cfg.MasterKeyHex != "" {
 		return cfg.MasterKeyBytes()
 	}
 	keyPath := filepath.Join(cfg.DataDir, "master.key")
-	if b, err := os.ReadFile(keyPath); err == nil && len(b) == 32 {
+	if b, err := os.ReadFile(keyPath); err == nil {
+		if len(b) != 32 {
+			return nil, fmt.Errorf("master key file %s is corrupt (len=%d, want 32); refusing to overwrite", keyPath, len(b))
+		}
 		return b, nil
+	}
+	// keyfile 不存在：若数据库已存在，说明此前用 env 密钥（或 keyfile 被删）运行过，
+	// 重新生成会导致旧密文无法解密，因此直接报错。
+	if _, err := os.Stat(filepath.Join(cfg.DataDir, "server-agent-link.db")); err == nil {
+		return nil, fmt.Errorf("no master key found but database exists in %s; set SAL_MASTER_KEY to the original key", cfg.DataDir)
 	}
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		return nil, err

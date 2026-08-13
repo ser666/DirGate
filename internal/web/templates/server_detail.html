@@ -5,6 +5,7 @@
 {{template "nav" .}}
 <main>
 <h1>{{.Server.Name}} <small>{{.Server.Host}}:{{.Server.SSHPort}}</small></h1>
+
 <h2>账户</h2>
 <ul>
 {{range .Accounts}}
@@ -16,6 +17,30 @@
   </li>
 {{end}}
 </ul>
+
+<h2>添加账户</h2>
+<form id="add-account">
+  <input name="username" placeholder="用户名" required>
+  <input name="password" type="password" placeholder="密码" required>
+  <label><input type="checkbox" name="coding_capable"> 编码能力</label>
+  <label><input type="checkbox" name="exposed_to_agent"> 暴露给 agent</label>
+  <input name="permissions" placeholder="权限 path=mode 逗号分隔，如 /data/a=rw,/data/b=ro">
+  <button type="submit">创建</button>
+</form>
 </main>
+<script>
+salSubmit('add-account', '/api/servers/{{.Server.ID}}/accounts', function (fd) {
+  var perms = (fd.get('permissions') || '').split(',').filter(Boolean).map(function (s) {
+    var kv = s.split('=');
+    return { path: kv[0].trim(), mode: (kv[1] || 'rw').trim() };
+  });
+  return {
+    username: fd.get('username'), password: fd.get('password'),
+    coding_capable: fd.get('coding_capable') === 'on',
+    exposed_to_agent: fd.get('exposed_to_agent') === 'on',
+    permissions: perms
+  };
+});
+</script>
 </body>
 </html>{{end}}

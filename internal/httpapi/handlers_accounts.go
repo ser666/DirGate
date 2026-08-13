@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -115,13 +116,18 @@ func (s *Server) provision(r *http.Request, a *store.Account) {
 		s.markError(r, a.ID, err)
 		return
 	}
-	if fp != "" && fp != sv.HostKey {
-		sv.HostKey = fp
-		_ = s.st.UpdateServer(r.Context(), *sv)
-	}
+	s.persistHostKey(r.Context(), sv, fp)
 	a.Status = store.StatusActive
 	a.LastError = ""
 	_ = s.st.UpdateAccount(r.Context(), *a)
+}
+
+// persistHostKey 在成功 SSH 后回写观察到的指纹（TOFU 固定）。
+func (s *Server) persistHostKey(ctx context.Context, sv *store.Server, fp string) {
+	if fp != "" && fp != sv.HostKey {
+		sv.HostKey = fp
+		_ = s.st.UpdateServer(ctx, *sv)
+	}
 }
 
 func (s *Server) markError(r *http.Request, accountID string, err error) {
@@ -180,17 +186,19 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	spec := sshx.UserSpec{Username: a.Username, Password: ""}
-	if err := s.exec.DeleteUser(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), sv.HostKey, spec); err != nil {
+	fp, err := s.exec.DeleteUser(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), sv.HostKey, spec)
+	if err != nil {
 		// 远端删户失败则不删库，保留记录供重试，避免留下无 UI 记录的孤儿账户。
 		s.markError(r, a.ID, err)
 		writeErr(w, http.StatusBadGateway, "delete user failed")
 		return
 	}
+	s.persistHostKey(r.Context(), sv, fp)
 	if err := s.st.DeleteAccount(r.Context(), a.ID); err != nil {
 		writeErr(w, http.StatusInternalServerError, "delete account failed")
 		return
 	}
-	writeJSON(w, http.StatusNoContent, nil)
+	writeNoContent(w)
 }
 
 func (s *Server) handleListPermissions(w http.ResponseWriter, r *http.Request) {
@@ -251,7 +259,12 @@ func (s *Server) applyPermissions(r *http.Request, a *store.Account, newPerms, o
 			spec.Removed = append(spec.Removed, sshx.PermissionSpec{Path: old.Path, Mode: old.Mode})
 		}
 	}
-	return s.exec.UpdatePermissions(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), sv.HostKey, spec)
+	fp, err := s.exec.UpdatePermissions(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), sv.HostKey, spec)
+	if err != nil {
+		return err
+	}
+	s.persistHostKey(r.Context(), sv, fp)
+	return nil
 }
 
 func hasPerm(perms []store.DirectoryPermission, p store.DirectoryPermission) bool {

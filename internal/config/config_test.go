@@ -14,9 +14,6 @@ func TestLoadDefaults(t *testing.T) {
 	if c.ListenAddr != ":8080" {
 		t.Fatalf("listen = %q", c.ListenAddr)
 	}
-	if c.PermissionBackend != "acl" {
-		t.Fatalf("backend = %q", c.PermissionBackend)
-	}
 	if _, err := c.MasterKeyBytes(); err != nil {
 		t.Fatal(err)
 	}
@@ -30,9 +27,13 @@ func TestMasterKeyBadLength(t *testing.T) {
 	}
 }
 
-func TestBackendInvalid(t *testing.T) {
-	t.Setenv("SAL_PERMISSION_BACKEND", "bogus")
+func TestTLSCertRequiresKey(t *testing.T) {
+	t.Setenv("SAL_TLS_CERT", "/tmp/cert.pem")
 	if _, err := Load(); err == nil {
-		t.Fatal("expected error for bad backend")
+		t.Fatal("expected error when only cert set")
+	}
+	t.Setenv("SAL_TLS_KEY", "/tmp/key.pem")
+	if _, err := Load(); err != nil {
+		t.Fatalf("expected ok with both cert+key: %v", err)
 	}
 }

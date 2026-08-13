@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,19 +11,16 @@ import (
 func TestCreateAndListServers(t *testing.T) {
 	srv := newTestServer(t)
 	h := srv.Handler()
-	cookie := login(t, srv, h)
 
 	body := `{"name":"dev1","host":"10.0.0.5","ssh_port":22,"root_user":"root","root_password":"rootpw"}`
-	req := httptest.NewRequest("POST", "/api/servers", bytes.NewReader([]byte(body)))
-	req.AddCookie(cookie)
+	req := authedRequest(t, srv, h, "POST", "/api/servers", []byte(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create code=%d body=%s", rec.Code, rec.Body)
 	}
 
-	req = httptest.NewRequest("GET", "/api/servers", nil)
-	req.AddCookie(cookie)
+	req = authedRequest(t, srv, h, "GET", "/api/servers", nil)
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -47,21 +44,100 @@ func TestCreateAndListServers(t *testing.T) {
 func TestDeleteServer(t *testing.T) {
 	srv := newTestServer(t)
 	h := srv.Handler()
-	cookie := login(t, srv, h)
 
 	body := `{"name":"dev1","host":"10.0.0.5","ssh_port":22,"root_user":"root","root_password":"rootpw"}`
-	req := httptest.NewRequest("POST", "/api/servers", bytes.NewReader([]byte(body)))
-	req.AddCookie(cookie)
+	req := authedRequest(t, srv, h, "POST", "/api/servers", []byte(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	var created map[string]any
 	json.Unmarshal(rec.Body.Bytes(), &created)
 
-	req = httptest.NewRequest("DELETE", "/api/servers/"+created["id"].(string), nil)
-	req.AddCookie(cookie)
+	req = authedRequest(t, srv, h, "DELETE", "/api/servers/"+created["id"].(string), nil)
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
-		t.Fatalf("delete code=%d", rec.Code)
+		t.Fatalf("delete code=%d body=%s", rec.Code, rec.Body)
+	}
+}
+
+func TestUpdateServerClearsHostKeyOnHostChange(t *testing.T) {
+	srv := newTestServer(t)
+	srv.exec = &fakeExec{}
+	h := srv.Handler()
+
+	sv, _ := srv.st.CreateServer(context.Background(), "dev1", "10.0.0.5", 22, "root", "rootpw")
+	sv.HostKey = "SHA256:oldfp"
+	_ = srv.st.UpdateServer(context.Background(), *sv)
+
+	req := authedRequest(t, srv, h, "PUT", "/api/servers/"+sv.ID, []byte(`{"host":"10.0.0.6"}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body)
+	}
+	got, _ := srv.st.GetServer(context.Background(), sv.ID)
+	if got.Host != "10.0.0.6" || got.HostKey != "" {
+		t.Fatalf("host=%q host_key=%q (want cleared)", got.Host, got.HostKey)
+	}
+}
+
+func TestUpdateServerResetHostKey(t *testing.T) {
+	srv := newTestServer(t)
+	srv.exec = &fakeExec{}
+	h := srv.Handler()
+
+	sv, _ := srv.st.CreateServer(context.Background(), "dev1", "10.0.0.5", 22, "root", "rootpw")
+	sv.HostKey = "SHA256:oldfp"
+	_ = srv.st.UpdateServer(context.Background(), *sv)
+
+	req := authedRequest(t, srv, h, "PUT", "/api/servers/"+sv.ID, []byte(`{"reset_host_key":true}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body)
+	}
+	got, _ := srv.st.GetServer(context.Background(), sv.ID)
+	if got.HostKey != "" {
+		t.Fatalf("host_key should be reset, got %q", got.HostKey)
+	}
+}
+
+func TestDeleteServerCleansUpRemoteUsers(t *testing.T) {
+	srv := newTestServer(t)
+	fx := &fakeExec{}
+	srv.exec = fx
+	h := srv.Handler()
+
+	sv, _ := srv.st.CreateServer(context.Background(), "dev1", "10.0.0.5", 22, "root", "rootpw")
+	_, _ = srv.st.CreateAccount(context.Background(), sv.ID, "alice", "pw", true, true)
+	_, _ = srv.st.CreateAccount(context.Background(), sv.ID, "bob", "pw", false, false)
+
+	req := authedRequest(t, srv, h, "DELETE", "/api/servers/"+sv.ID, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete code=%d body=%s", rec.Code, rec.Body)
+	}
+	if fx.deleted != 2 {
+		t.Fatalf("expected 2 remote deletes, got %d", fx.deleted)
+	}
+}
+
+func TestDeleteServerRemoteFailureKeepsRecord(t *testing.T) {
+	srv := newTestServer(t)
+	srv.exec = &failExec{err: context.DeadlineExceeded}
+	h := srv.Handler()
+
+	sv, _ := srv.st.CreateServer(context.Background(), "dev1", "10.0.0.5", 22, "root", "rootpw")
+	_, _ = srv.st.CreateAccount(context.Background(), sv.ID, "alice", "pw", true, true)
+
+	req := authedRequest(t, srv, h, "DELETE", "/api/servers/"+sv.ID, nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("delete code=%d body=%s", rec.Code, rec.Body)
+	}
+	if _, err := srv.st.GetServer(context.Background(), sv.ID); err != nil {
+		t.Fatalf("server should be kept: %v", err)
 	}
 }

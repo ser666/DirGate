@@ -34,6 +34,9 @@ func TestBearerAuthRequired(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("code=%d", rec.Code)
 	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("content-type=%q, want application/json", ct)
+	}
 }
 
 func TestToolsListed(t *testing.T) {
