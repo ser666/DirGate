@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"crypto/subtle"
 	"net/http"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -67,8 +68,9 @@ func NewHandler(st *store.Store, key []byte, token string) (http.Handler, error)
 }
 
 func bearerAuth(token string, next http.Handler) http.Handler {
+	expected := []byte("Bearer " + token)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer "+token {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), expected) != 1 {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}

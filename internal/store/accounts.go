@@ -122,7 +122,7 @@ func (s *Store) ListExposedAccounts(ctx context.Context) ([]ExposedAccount, erro
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT sv.id, sv.name, sv.host, sv.ssh_port, a.id, a.username, a.password_enc, a.coding_capable
 		 FROM accounts a JOIN servers sv ON sv.id = a.server_id
-		 WHERE a.exposed_to_agent = 1 ORDER BY sv.name, a.username`)
+		 WHERE a.exposed_to_agent = 1 AND sv.enabled = 1 ORDER BY sv.name, a.username`)
 	if err != nil {
 		return nil, err
 	}

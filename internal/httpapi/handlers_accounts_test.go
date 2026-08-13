@@ -13,16 +13,22 @@ import (
 	"serveragentlink/internal/store"
 )
 
-type fakeExec struct{ created int }
+type fakeExec struct {
+	created int
+	updated *sshx.UserSpec
+	deleted int
+}
 
 func (f *fakeExec) CreateUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error) {
 	f.created++
 	return "fp", nil
 }
-func (f *fakeExec) DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword string, spec sshx.UserSpec) error {
+func (f *fakeExec) DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) error {
+	f.deleted++
 	return nil
 }
-func (f *fakeExec) UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword string, spec sshx.UserSpec) error {
+func (f *fakeExec) UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) error {
+	f.updated = &spec
 	return nil
 }
 
@@ -31,11 +37,11 @@ type failExec struct{ err error }
 func (f *failExec) CreateUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error) {
 	return "", f.err
 }
-func (f *failExec) DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword string, spec sshx.UserSpec) error {
-	return nil
+func (f *failExec) DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) error {
+	return f.err
 }
-func (f *failExec) UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword string, spec sshx.UserSpec) error {
-	return nil
+func (f *failExec) UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) error {
+	return f.err
 }
 
 func TestCreateAccountProvision(t *testing.T) {
@@ -115,5 +121,90 @@ func TestProvisionFailureMarksError(t *testing.T) {
 	accs, _ := srv.st.ListAccounts(context.Background(), sv.ID)
 	if len(accs) != 1 || accs[0].Status != store.StatusError || accs[0].LastError == "" {
 		t.Fatalf("acc=%+v", accs)
+	}
+}
+
+func TestProvisionFailurePreservesFlags(t *testing.T) {
+	srv := newTestServer(t)
+	srv.exec = &failExec{err: fmt.Errorf("boom")}
+	h := srv.Handler()
+	cookie := login(t, srv, h)
+	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
+	body := `{"username":"alice","password":"pw","coding_capable":true,"exposed_to_agent":true,"permissions":[]}`
+	req := httptest.NewRequest("POST", "/api/servers/"+sv.ID+"/accounts", bytes.NewReader([]byte(body)))
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body)
+	}
+	accs, _ := srv.st.ListAccounts(context.Background(), sv.ID)
+	// 建户失败仅标记 status=error，不得清空编码/暴露标志。
+	if len(accs) != 1 || !accs[0].CodingCapable || !accs[0].ExposedToAgent || accs[0].Status != store.StatusError {
+		t.Fatalf("flags lost: %+v", accs[0])
+	}
+}
+
+func TestSetPermissionsPushesRevocation(t *testing.T) {
+	srv := newTestServer(t)
+	fx := &fakeExec{}
+	srv.exec = fx
+	h := srv.Handler()
+	cookie := login(t, srv, h)
+	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
+
+	body := `{"username":"alice","password":"pw","permissions":[{"path":"/data/a","mode":"rw"}]}`
+	req := httptest.NewRequest("POST", "/api/servers/"+sv.ID+"/accounts", bytes.NewReader([]byte(body)))
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	var created accountDTO
+	json.Unmarshal(rec.Body.Bytes(), &created)
+
+	// 改权限为仅 /data/b，应推送到服务器并撤销 /data/a。
+	req = httptest.NewRequest("PUT", "/api/accounts/"+created.ID+"/permissions", bytes.NewReader([]byte(`[{"path":"/data/b","mode":"ro"}]`)))
+	req.AddCookie(cookie)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set perms code=%d body=%s", rec.Code, rec.Body)
+	}
+	if fx.updated == nil {
+		t.Fatal("UpdatePermissions not called")
+	}
+	if len(fx.updated.Permissions) != 1 || fx.updated.Permissions[0].Path != "/data/b" {
+		t.Fatalf("perms=%+v", fx.updated.Permissions)
+	}
+	if len(fx.updated.Removed) != 1 || fx.updated.Removed[0].Path != "/data/a" {
+		t.Fatalf("removed=%+v", fx.updated.Removed)
+	}
+}
+
+func TestDeleteAccountFailureKeepsRecord(t *testing.T) {
+	srv := newTestServer(t)
+	srv.exec = &failExec{err: fmt.Errorf("ssh down")}
+	h := srv.Handler()
+	cookie := login(t, srv, h)
+	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
+
+	body := `{"username":"alice","password":"pw","permissions":[]}`
+	req := httptest.NewRequest("POST", "/api/servers/"+sv.ID+"/accounts", bytes.NewReader([]byte(body)))
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	var created accountDTO
+	json.Unmarshal(rec.Body.Bytes(), &created)
+
+	req = httptest.NewRequest("DELETE", "/api/accounts/"+created.ID, nil)
+	req.AddCookie(cookie)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("delete code=%d body=%s", rec.Code, rec.Body)
+	}
+	// 远端删户失败则保留 DB 记录，避免孤儿账户。
+	accs, _ := srv.st.ListAccounts(context.Background(), sv.ID)
+	if len(accs) != 1 {
+		t.Fatalf("account should be kept, got %d", len(accs))
 	}
 }

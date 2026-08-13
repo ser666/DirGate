@@ -13,8 +13,8 @@ import (
 // userExecutor 是 sshx.Executor 的可注入接口，便于测试用 fake 替身。
 type userExecutor interface {
 	CreateUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error)
-	DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword string, spec sshx.UserSpec) error
-	UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword string, spec sshx.UserSpec) error
+	DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) error
+	UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) error
 }
 
 type Server struct {

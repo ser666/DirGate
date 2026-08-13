@@ -36,7 +36,7 @@ func (s *Server) verifyCookie(cookie string) (string, bool) {
 		return "", false
 	}
 	payload := string(raw)
-	if s.mac(payload) != parts[1] {
+	if !hmac.Equal([]byte(s.mac(payload)), []byte(parts[1])) {
 		return "", false
 	}
 	return payload, true
@@ -96,9 +96,7 @@ func recordLoginAttempt(ip string) {
 }
 
 func clientIP(r *http.Request) string {
-	if h := r.Header.Get("X-Forwarded-For"); h != "" {
-		return strings.TrimSpace(strings.Split(h, ",")[0])
-	}
+	// 不信任客户端可伪造的 X-Forwarded-For（否则登录限流可被绕过）。
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr

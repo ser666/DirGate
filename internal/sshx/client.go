@@ -3,6 +3,7 @@ package sshx
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"time"
@@ -42,11 +43,29 @@ func Dial(host string, port int, user, password, knownHost string) (*Client, str
 
 // Run 执行命令并返回合并的 stdout/stderr，受 ctx 取消控制。
 func (c *Client) Run(ctx context.Context, cmd string) (string, error) {
+	return c.RunStdin(ctx, cmd, "")
+}
+
+// RunStdin 执行命令，把 stdinData 写入远端命令的 stdin。
+// 用于把敏感输入（如 chpasswd 的 username:password）经加密通道传送，
+// 避免出现在远端命令行（ps）中。
+func (c *Client) RunStdin(ctx context.Context, cmd, stdinData string) (string, error) {
 	sess, err := c.client.NewSession()
 	if err != nil {
 		return "", err
 	}
 	defer sess.Close()
+
+	if stdinData != "" {
+		stdin, err := sess.StdinPipe()
+		if err != nil {
+			return "", err
+		}
+		go func() {
+			defer stdin.Close()
+			_, _ = io.WriteString(stdin, stdinData)
+		}()
+	}
 
 	type result struct {
 		out string
@@ -62,6 +81,10 @@ func (c *Client) Run(ctx context.Context, cmd string) (string, error) {
 	case r := <-ch:
 		return r.out, r.err
 	case <-ctx.Done():
+		// 关闭底层连接中止会话，令 Output 尽快返回；随后等待 worker 结束，
+		// 避免与 defer sess.Close() 并发关闭同一个 session。
+		_ = c.client.Close()
+		<-ch
 		return "", ctx.Err()
 	}
 }

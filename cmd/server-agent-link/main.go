@@ -54,9 +54,10 @@ func main() {
 }
 
 // resolveKey 返回 32 字节主密钥：优先 env，其次数据目录 keyfile（无则生成并写 0600）。
+// 若 env 已设置但非法（hex/长度错误），返回错误而非静默回退，避免旧密文无法解密。
 func resolveKey(cfg *config.Config) ([]byte, error) {
-	if k, err := cfg.MasterKeyBytes(); err == nil {
-		return k, nil
+	if cfg.MasterKeyHex != "" {
+		return cfg.MasterKeyBytes()
 	}
 	keyPath := filepath.Join(cfg.DataDir, "master.key")
 	if b, err := os.ReadFile(keyPath); err == nil && len(b) == 32 {
@@ -75,22 +76,33 @@ func resolveKey(cfg *config.Config) ([]byte, error) {
 	return k, nil
 }
 
-// bootstrap 首次运行时创建管理员。
+// bootstrap 首次运行时创建管理员；未指定密码时生成随机密码并写入 0600 文件（不落 stdout/日志）。
 func bootstrap(ctx context.Context, st *store.Store, cfg *config.Config) error {
-	if _, err := st.GetAdmin(ctx); err == store.ErrNotFound {
-		pw := cfg.AdminPassword
-		if pw == "" {
-			t, _ := crypto.RandomToken()
-			pw = t
-			log.Printf("generated admin password: %s", pw)
-		}
-		hash, err := crypto.HashPassword(pw)
+	_, err := st.GetAdmin(ctx)
+	if err == nil {
+		return nil
+	}
+	if err != store.ErrNotFound {
+		return err
+	}
+	pw := cfg.AdminPassword
+	if pw == "" {
+		pw, err = crypto.RandomToken()
 		if err != nil {
 			return err
 		}
-		if err := st.UpsertAdmin(ctx, cfg.AdminUser, hash); err != nil {
+		pwPath := filepath.Join(cfg.DataDir, "admin-password.txt")
+		if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 			return err
 		}
+		if err := os.WriteFile(pwPath, []byte(pw+"\n"), 0o600); err != nil {
+			return err
+		}
+		log.Printf("generated admin password written to %s", pwPath)
 	}
-	return nil
+	hash, err := crypto.HashPassword(pw)
+	if err != nil {
+		return err
+	}
+	return st.UpsertAdmin(ctx, cfg.AdminUser, hash)
 }

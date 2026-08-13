@@ -63,7 +63,11 @@ func (s *Server) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.provision(r, a)
-	acc, _ := s.st.GetAccount(r.Context(), a.ID)
+	acc, err := s.st.GetAccount(r.Context(), a.ID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "get account failed")
+		return
+	}
 	perms, _ := s.st.ListPermissions(r.Context(), a.ID)
 	writeJSON(w, http.StatusCreated, toAccountDTO(*acc, perms))
 }
@@ -75,7 +79,11 @@ func (s *Server) handleProvisionAccount(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	s.provision(r, a)
-	acc, _ := s.st.GetAccount(r.Context(), a.ID)
+	acc, err := s.st.GetAccount(r.Context(), a.ID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "get account failed")
+		return
+	}
 	perms, _ := s.st.ListPermissions(r.Context(), a.ID)
 	writeJSON(w, http.StatusOK, toAccountDTO(*acc, perms))
 }
@@ -117,7 +125,14 @@ func (s *Server) provision(r *http.Request, a *store.Account) {
 }
 
 func (s *Server) markError(r *http.Request, accountID string, err error) {
-	_ = s.st.UpdateAccount(r.Context(), store.Account{ID: accountID, Status: store.StatusError, LastError: err.Error()})
+	// 先取回完整账户再更新，避免用部分结构体覆盖 coding_capable/exposed_to_agent。
+	a, e := s.st.GetAccount(r.Context(), accountID)
+	if e != nil {
+		return
+	}
+	a.Status = store.StatusError
+	a.LastError = err.Error()
+	_ = s.st.UpdateAccount(r.Context(), *a)
 }
 
 func (s *Server) handleUpdateAccount(w http.ResponseWriter, r *http.Request) {
@@ -159,10 +174,22 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	rootPw, _ := s.st.Decrypt(sv.RootPasswordEnc)
+	rootPw, err := s.st.Decrypt(sv.RootPasswordEnc)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "decrypt root password failed")
+		return
+	}
 	spec := sshx.UserSpec{Username: a.Username, Password: ""}
-	_ = s.exec.DeleteUser(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), spec)
-	_ = s.st.DeleteAccount(r.Context(), a.ID)
+	if err := s.exec.DeleteUser(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), sv.HostKey, spec); err != nil {
+		// 远端删户失败则不删库，保留记录供重试，避免留下无 UI 记录的孤儿账户。
+		s.markError(r, a.ID, err)
+		writeErr(w, http.StatusBadGateway, "delete user failed")
+		return
+	}
+	if err := s.st.DeleteAccount(r.Context(), a.ID); err != nil {
+		writeErr(w, http.StatusInternalServerError, "delete account failed")
+		return
+	}
 	writeJSON(w, http.StatusNoContent, nil)
 }
 
@@ -181,16 +208,59 @@ func (s *Server) handleListPermissions(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSetPermissions(w http.ResponseWriter, r *http.Request) {
 	accountID := r.PathValue("id")
+	a, err := s.st.GetAccount(r.Context(), accountID)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
 	var in []permissionInput
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	if err := s.st.SetPermissions(r.Context(), accountID, toStorePerms(in)); err != nil {
+	newPerms := toStorePerms(in)
+	oldPerms, _ := s.st.ListPermissions(r.Context(), accountID)
+	if err := s.st.SetPermissions(r.Context(), accountID, newPerms); err != nil {
 		writeErr(w, http.StatusInternalServerError, "set perms failed")
 		return
 	}
+	// 把新权限真实应用到服务器（含撤销被移除目录的 ACL）；失败则标记账户 error，DB 更新仍保留。
+	if err := s.applyPermissions(r, a, newPerms, oldPerms); err != nil {
+		s.markError(r, a.ID, err)
+		writeErr(w, http.StatusBadGateway, "apply permissions failed")
+		return
+	}
 	writeJSON(w, http.StatusOK, in)
+}
+
+func (s *Server) applyPermissions(r *http.Request, a *store.Account, newPerms, oldPerms []store.DirectoryPermission) error {
+	sv, err := s.st.GetServer(r.Context(), a.ServerID)
+	if err != nil {
+		return err
+	}
+	rootPw, err := s.st.Decrypt(sv.RootPasswordEnc)
+	if err != nil {
+		return err
+	}
+	spec := sshx.UserSpec{Username: a.Username, Password: ""}
+	for _, p := range newPerms {
+		spec.Permissions = append(spec.Permissions, sshx.PermissionSpec{Path: p.Path, Mode: p.Mode})
+	}
+	for _, old := range oldPerms {
+		if !hasPerm(newPerms, old) {
+			spec.Removed = append(spec.Removed, sshx.PermissionSpec{Path: old.Path, Mode: old.Mode})
+		}
+	}
+	return s.exec.UpdatePermissions(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), sv.HostKey, spec)
+}
+
+func hasPerm(perms []store.DirectoryPermission, p store.DirectoryPermission) bool {
+	for _, x := range perms {
+		if x.Path == p.Path {
+			return true
+		}
+	}
+	return false
 }
 
 func toStorePerms(in []permissionInput) []store.DirectoryPermission {

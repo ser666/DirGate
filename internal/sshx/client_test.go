@@ -5,7 +5,9 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
+	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,9 +65,14 @@ func handleConn(conn net.Conn, config *ssh.ServerConfig) {
 				case "exec":
 					payload := struct{ Command string }{}
 					ssh.Unmarshal(req.Payload, &payload)
-					channel.Write([]byte("out:" + payload.Command))
-					channel.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{0}))
+					// 先回复 exec，解除客户端 Start 的阻塞，它随后才会发送 stdin（及 EOF）。
 					req.Reply(true, nil)
+					stdin, _ := io.ReadAll(channel)
+					channel.Write([]byte("out:" + payload.Command))
+					if len(stdin) > 0 {
+						channel.Write([]byte(" stdin:" + string(stdin)))
+					}
+					channel.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{0}))
 					channel.Close()
 				}
 			}
@@ -110,4 +117,27 @@ func TestDialRunAndTOFU(t *testing.T) {
 		t.Fatalf("dial with fp: %v", err)
 	}
 	c2.Close()
+}
+
+func TestRunStdinDeliversInput(t *testing.T) {
+	addr, _ := startTestServer(t)
+	host, portStr, _ := net.SplitHostPort(addr)
+	port := 0
+	fmt.Sscanf(portStr, "%d", &port)
+
+	c, _, err := Dial(host, port, "root", "testpw", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := c.RunStdin(ctx, "chpasswd", "alice:supersecret\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, " stdin:alice:supersecret\n") {
+		t.Fatalf("stdin not delivered: %q", out)
+	}
 }
