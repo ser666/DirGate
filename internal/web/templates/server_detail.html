@@ -1,0 +1,21 @@
+{{define "server_detail"}}<!doctype html>
+<html lang="zh">
+{{template "head" .}}
+<body>
+{{template "nav" .}}
+<main>
+<h1>{{.Server.Name}} <small>{{.Server.Host}}:{{.Server.SSHPort}}</small></h1>
+<h2>账户</h2>
+<ul>
+{{range .Accounts}}
+  <li>{{.Username}} — 状态:{{.Status}}
+      {{if .CodingCapable}}[编码]{{end}}
+      {{if .ExposedToAgent}}[已暴露]{{end}}
+      <button hx-delete="/api/accounts/{{.ID}}" hx-confirm="确认删除?">删除</button>
+      <button hx-post="/api/accounts/{{.ID}}/provision" hx-target="closest li">重新建户</button>
+  </li>
+{{end}}
+</ul>
+</main>
+</body>
+</html>{{end}}

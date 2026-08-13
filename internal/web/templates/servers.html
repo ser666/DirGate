@@ -1,0 +1,15 @@
+{{define "servers"}}<!doctype html>
+<html lang="zh">
+{{template "head" .}}
+<body>
+{{template "nav" .}}
+<main>
+<h1>服务器</h1>
+<button hx-get="/servers/new" hx-target="#form">添加服务器</button>
+<div id="form"></div>
+<ul>
+{{range .Servers}}<li><a href="/servers/{{.ID}}">{{.Name}} ({{.Host}})</a></li>{{end}}
+</ul>
+</main>
+</body>
+</html>{{end}}

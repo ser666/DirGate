@@ -1,0 +1,10 @@
+{{define "head"}}<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ServerAgentLink</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>{{end}}
+
+{{define "nav"}}<nav><a href="/">ServerAgentLink</a>
+  {{if .Authed}}<form method="post" action="/api/logout"><button>退出</button></form>{{end}}
+</nav>{{end}}

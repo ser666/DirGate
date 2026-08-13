@@ -1,0 +1,9 @@
+body { font-family: system-ui, sans-serif; margin: 0; color: #1f2933; }
+nav { display: flex; justify-content: space-between; align-items: center; padding: .6rem 1rem; background: #111827; }
+nav a { color: #fff; text-decoration: none; font-weight: 600; }
+nav button { background: #374151; color: #fff; border: 0; padding: .35rem .7rem; border-radius: 4px; cursor: pointer; }
+main { max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+h1 small { font-size: .6em; color: #6b7280; font-weight: normal; }
+ul { padding-left: 1.2rem; }
+li { margin: .5rem 0; }
+input, button { padding: .4rem .6rem; margin: .15rem 0; }
