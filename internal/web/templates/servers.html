@@ -3,22 +3,53 @@
 {{template "head" .}}
 <body>
 {{template "nav" .}}
-<main>
-<h1>服务器</h1>
+<main class="shell">
+  <div class="page-head">
+    <div>
+      <h1>服务器</h1>
+      <p class="sub">管理目标服务器，及其编码账户与逐目录权限</p>
+    </div>
+  </div>
 
-<h2>添加服务器</h2>
-<form id="add-server">
-  <input name="name" placeholder="名称" required>
-  <input name="host" placeholder="主机 IP/域名" required>
-  <input name="ssh_port" type="number" placeholder="22" value="22">
-  <input name="root_user" placeholder="root" value="root">
-  <input name="root_password" type="password" placeholder="root 密码" required>
-  <button type="submit">添加</button>
-</form>
+  <section class="card">
+    <h2 class="card-title">添加服务器</h2>
+    <form id="add-server" class="form grid">
+      <label>名称<input name="name" placeholder="如 dev1" required></label>
+      <label>主机<input name="host" placeholder="IP 或域名" required></label>
+      <label>SSH 端口<input name="ssh_port" type="number" value="22" placeholder="22"></label>
+      <label>root 用户<input name="root_user" value="root" placeholder="root"></label>
+      <label>root 密码<input name="root_password" type="password" required></label>
+      <div class="form-actions"><button type="submit" class="btn btn-primary">添加服务器</button></div>
+    </form>
+  </section>
 
-<ul>
-{{range .Servers}}<li><a href="/servers/{{.ID}}">{{.Name}} ({{.Host}})</a></li>{{end}}
-</ul>
+  <section class="card">
+    <h2 class="card-title">服务器列表 <span class="count">{{len .Servers}}</span></h2>
+    {{if .Servers}}
+    <table class="table">
+      <thead>
+        <tr><th>名称</th><th>主机</th><th>状态</th><th>账户</th><th class="right">操作</th></tr>
+      </thead>
+      <tbody>
+      {{range .Servers}}
+        <tr>
+          <td><a class="mono" href="/servers/{{.ID}}">{{.Name}}</a></td>
+          <td><span class="mono">{{.Host}}:{{.SSHPort}}</span></td>
+          <td id="st-{{.ID}}">{{if .Verified}}<span class="dot dot-ok"></span>已验证{{else}}<span class="dot dot-dim"></span>未验证{{end}}</td>
+          <td><span class="mono">{{.AccountCount}}</span></td>
+          <td class="right">
+            <a class="btn btn-sm" href="/servers/{{.ID}}">进入</a>
+            <button class="btn btn-sm" data-action="test-server" data-id="{{.ID}}" data-target="st-{{.ID}}">测试连通</button>
+            <button class="btn btn-sm btn-danger" data-action="delete-server" data-id="{{.ID}}" data-confirm="删除该服务器，并远程删除其全部账户？">删除</button>
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">还没有服务器。在上方添加第一台目标服务器。</p>
+    {{end}}
+  </section>
 </main>
 <script>
 salSubmit('add-server', '/api/servers', function (fd) {

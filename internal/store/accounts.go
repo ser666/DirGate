@@ -65,6 +65,20 @@ func (s *Store) UpdateAccount(ctx context.Context, a Account) error {
 	return err
 }
 
+// UpdateAccountPassword 单独更新账户的加密密码（不触碰其它字段，供「改密码」使用）。
+func (s *Store) UpdateAccountPassword(ctx context.Context, id string, passwordEnc []byte) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE accounts SET password_enc=?, updated_at=? WHERE id=?`, passwordEnc, nowUTC(), id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) DeleteAccount(ctx context.Context, id string) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM accounts WHERE id=?`, id)
 	if err != nil {

@@ -1,6 +1,33 @@
 package httpapi
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+
+	"serveragentlink/internal/store"
+)
+
+// serverView 是服务器列表页的行视图，附带账户数与验证状态。
+type serverView struct {
+	store.Server
+	AccountCount int
+	Verified     bool
+}
+
+// accountView 是账户行视图，附带目录权限清单（供详情页直接渲染）。
+type accountView struct {
+	store.Account
+	Permissions []store.DirectoryPermission
+}
+
+// PermSpec 把权限渲染为「/path=mode,/path=mode」的紧凑字符串，用于表格展示与「改权限」输入框回填。
+func (a accountView) PermSpec() string {
+	parts := make([]string, 0, len(a.Permissions))
+	for _, p := range a.Permissions {
+		parts = append(parts, p.Path+"="+p.Mode)
+	}
+	return strings.Join(parts, ",")
+}
 
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "login", map[string]any{"Authed": false})
@@ -8,7 +35,16 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleServersPage(w http.ResponseWriter, r *http.Request) {
 	servers, _ := s.st.ListServers(r.Context())
-	s.render(w, "servers", map[string]any{"Authed": true, "Servers": servers})
+	views := make([]serverView, 0, len(servers))
+	for _, sv := range servers {
+		accounts, _ := s.st.ListAccounts(r.Context(), sv.ID)
+		views = append(views, serverView{
+			Server:       sv,
+			AccountCount: len(accounts),
+			Verified:     sv.HostKey != "",
+		})
+	}
+	s.render(w, "servers", map[string]any{"Authed": true, "Servers": views})
 }
 
 func (s *Server) handleServerPage(w http.ResponseWriter, r *http.Request) {
@@ -18,7 +54,17 @@ func (s *Server) handleServerPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	accounts, _ := s.st.ListAccounts(r.Context(), sv.ID)
-	s.render(w, "server_detail", map[string]any{"Authed": true, "Server": sv, "Accounts": accounts})
+	views := make([]accountView, 0, len(accounts))
+	for _, a := range accounts {
+		perms, _ := s.st.ListPermissions(r.Context(), a.ID)
+		views = append(views, accountView{Account: a, Permissions: perms})
+	}
+	s.render(w, "server_detail", map[string]any{
+		"Authed":   true,
+		"Server":   sv,
+		"Verified": sv.HostKey != "",
+		"Accounts": views,
+	})
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data map[string]any) {

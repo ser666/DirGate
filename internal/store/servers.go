@@ -69,6 +69,21 @@ func (s *Store) UpdateServer(ctx context.Context, sv Server) error {
 	return err
 }
 
+// MarkServerVerified 记录一次成功的连通性验证：固定主机指纹并写入验证时间。
+func (s *Store) MarkServerVerified(ctx context.Context, id, fp string) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE servers SET host_key=?, last_verified_at=?, updated_at=? WHERE id=?`,
+		fp, nowUTC(), nowUTC(), id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) DeleteServer(ctx context.Context, id string) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM servers WHERE id=?`, id)
 	if err != nil {

@@ -31,7 +31,7 @@
                              └────────────────────┘
 ```
 
-- **Web UI / REST API**：添加服务器、建/删账户、配目录权限、标记编码能力与暴露。
+- **Web UI / REST API**：添加服务器并「测试连通」验证主机/凭据/指纹，建/删账户，逐目录配/改权限，改密码，标记编码能力与暴露。
 - **MCP 服务**：`list_exposed_accounts` 工具，向 agent 返回被暴露账户的 `host / ssh_port / username / password / directories`。
 - **SSH 执行器**：用 root 凭据在服务器上真实执行 `useradd`、`chpasswd`、`setfacl`（ACL 后端）。
 - **SQLite 存储**：账户密码用 AES-256-GCM 加密落库；管理员密码用 argon2id 哈希。

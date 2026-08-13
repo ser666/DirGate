@@ -16,6 +16,7 @@ type fakeExec struct {
 	created int
 	updated *sshx.UserSpec
 	deleted int
+	tested  int
 }
 
 func (f *fakeExec) CreateUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error) {
@@ -30,6 +31,10 @@ func (f *fakeExec) UpdatePermissions(ctx context.Context, host string, port int,
 	f.updated = &spec
 	return "fp", nil
 }
+func (f *fakeExec) TestConnection(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string) (string, error) {
+	f.tested++
+	return "fp", nil
+}
 
 type failExec struct{ err error }
 
@@ -40,6 +45,9 @@ func (f *failExec) DeleteUser(ctx context.Context, host string, port int, rootUs
 	return "", f.err
 }
 func (f *failExec) UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error) {
+	return "", f.err
+}
+func (f *failExec) TestConnection(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string) (string, error) {
 	return "", f.err
 }
 
@@ -190,6 +198,100 @@ func TestDeleteAccountFailureKeepsRecord(t *testing.T) {
 	accs, _ := srv.st.ListAccounts(context.Background(), sv.ID)
 	if len(accs) != 1 {
 		t.Fatalf("account should be kept, got %d", len(accs))
+	}
+}
+
+func TestListAccounts(t *testing.T) {
+	srv := newTestServer(t)
+	srv.exec = &fakeExec{}
+	h := srv.Handler()
+
+	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
+	body := `{"username":"alice","password":"pw","permissions":[{"path":"/data/a","mode":"rw"},{"path":"/data/b","mode":"ro"}]}`
+	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/accounts", []byte(body))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	req = authedRequest(t, srv, h, "GET", "/api/servers/"+sv.ID+"/accounts", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list code=%d body=%s", rec.Code, rec.Body)
+	}
+	var out []accountDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 1 || len(out[0].Permissions) != 2 {
+		t.Fatalf("out=%+v", out)
+	}
+	if out[0].Permissions[0].Path != "/data/a" || out[0].Permissions[1].Mode != "ro" {
+		t.Fatalf("perms=%+v", out[0].Permissions)
+	}
+}
+
+func TestChangePassword(t *testing.T) {
+	srv := newTestServer(t)
+	fx := &fakeExec{}
+	srv.exec = fx
+	h := srv.Handler()
+
+	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
+	body := `{"username":"alice","password":"oldpw","permissions":[{"path":"/data/a","mode":"rw"}]}`
+	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/accounts", []byte(body))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	var created accountDTO
+	json.Unmarshal(rec.Body.Bytes(), &created)
+
+	req = authedRequest(t, srv, h, "PUT", "/api/accounts/"+created.ID+"/password", []byte(`{"password":"newpw"}`))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("change code=%d body=%s", rec.Code, rec.Body)
+	}
+	// 远端执行器应被调用（重置密码），且库中密码已更新。
+	if fx.created == 0 {
+		t.Fatal("executor not called for password reset")
+	}
+	a, _ := srv.st.GetAccount(context.Background(), created.ID)
+	pw, err := srv.st.Decrypt(a.PasswordEnc)
+	if err != nil || string(pw) != "newpw" {
+		t.Fatalf("decrypted=%q err=%v", pw, err)
+	}
+	if a.Status != store.StatusActive {
+		t.Fatalf("status=%q", a.Status)
+	}
+}
+
+func TestChangePasswordFailureMarksError(t *testing.T) {
+	srv := newTestServer(t)
+	srv.exec = &fakeExec{} // 建户成功
+	h := srv.Handler()
+
+	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
+	body := `{"username":"alice","password":"oldpw","permissions":[]}`
+	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/accounts", []byte(body))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	var created accountDTO
+	json.Unmarshal(rec.Body.Bytes(), &created)
+
+	// 改密码时远端失败 → 502 且保留旧密码、标记 error。
+	srv.exec = &failExec{err: fmt.Errorf("ssh down")}
+	req = authedRequest(t, srv, h, "PUT", "/api/accounts/"+created.ID+"/password", []byte(`{"password":"newpw"}`))
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("change code=%d body=%s", rec.Code, rec.Body)
+	}
+	a, _ := srv.st.GetAccount(context.Background(), created.ID)
+	pw, _ := srv.st.Decrypt(a.PasswordEnc)
+	if string(pw) != "oldpw" {
+		t.Fatalf("password must be unchanged, got %q", pw)
+	}
+	if a.Status != store.StatusError {
+		t.Fatalf("status=%q", a.Status)
 	}
 }
 

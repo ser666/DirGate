@@ -15,6 +15,7 @@ type userExecutor interface {
 	CreateUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error)
 	DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error)
 	UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error)
+	TestConnection(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string) (string, error)
 }
 
 type Server struct {
@@ -46,9 +47,12 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("GET /api/servers/{id}", s.handleGetServer)
 	api.HandleFunc("PUT /api/servers/{id}", s.handleUpdateServer)
 	api.HandleFunc("DELETE /api/servers/{id}", s.handleDeleteServer)
+	api.HandleFunc("GET /api/servers/{id}/accounts", s.handleListAccounts)
 	api.HandleFunc("POST /api/servers/{id}/accounts", s.handleCreateAccount)
+	api.HandleFunc("POST /api/servers/{id}/test", s.handleTestServer)
 	api.HandleFunc("POST /api/accounts/{id}/provision", s.handleProvisionAccount)
 	api.HandleFunc("PUT /api/accounts/{id}", s.handleUpdateAccount)
+	api.HandleFunc("PUT /api/accounts/{id}/password", s.handleChangePassword)
 	api.HandleFunc("DELETE /api/accounts/{id}", s.handleDeleteAccount)
 	api.HandleFunc("GET /api/accounts/{id}/permissions", s.handleListPermissions)
 	api.HandleFunc("PUT /api/accounts/{id}/permissions", s.handleSetPermissions)

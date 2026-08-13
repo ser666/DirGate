@@ -122,6 +122,32 @@ func (s *Server) handleUpdateServer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toServerDTO(*sv))
 }
 
+// handleTestServer 用已存 root 凭据做一次真实 SSH 拨号 + 无害命令，
+// 验证主机可达 / root 密码正确 / 主机指纹匹配，成功后固定指纹并记录验证时间。
+// 连通失败返回 200 + ok:false（这是测试结果，而非服务器内部错误）。
+func (s *Server) handleTestServer(w http.ResponseWriter, r *http.Request) {
+	sv, err := s.st.GetServer(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	rootPw, err := s.st.Decrypt(sv.RootPasswordEnc)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "decrypt root password failed")
+		return
+	}
+	fp, err := s.exec.TestConnection(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), sv.HostKey)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"connected": false, "error": err.Error()})
+		return
+	}
+	if err := s.st.MarkServerVerified(r.Context(), sv.ID, fp); err != nil {
+		writeErr(w, http.StatusInternalServerError, "persist failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"connected": true, "host_key": fp})
+}
+
 func (s *Server) handleDeleteServer(w http.ResponseWriter, r *http.Request) {
 	sv, err := s.st.GetServer(r.Context(), r.PathValue("id"))
 	if err != nil {

@@ -43,6 +43,25 @@ func toAccountDTO(a store.Account, perms []store.DirectoryPermission) accountDTO
 	return dto
 }
 
+func (s *Server) handleListAccounts(w http.ResponseWriter, r *http.Request) {
+	serverID := r.PathValue("id")
+	if _, err := s.st.GetServer(r.Context(), serverID); err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	accounts, err := s.st.ListAccounts(r.Context(), serverID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "db error")
+		return
+	}
+	out := make([]accountDTO, 0, len(accounts))
+	for _, a := range accounts {
+		perms, _ := s.st.ListPermissions(r.Context(), a.ID)
+		out = append(out, toAccountDTO(a, perms))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 func (s *Server) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 	serverID := r.PathValue("id")
 	var in accountInput
@@ -169,6 +188,54 @@ func (s *Server) handleUpdateAccount(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toAccountDTO(*a, perms))
 }
 
+// handleChangePassword 在服务器上重置该 OS 用户的密码，并同步更新加密存储。
+// 复用 CreateUser（幂等：useradd||skip + chpasswd），不改动目录 ACL。
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	a, err := s.st.GetAccount(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var in struct {
+		Password string `json:"password"`
+	}
+	if json.NewDecoder(r.Body).Decode(&in) != nil || in.Password == "" {
+		writeErr(w, http.StatusBadRequest, "password required")
+		return
+	}
+	sv, err := s.st.GetServer(r.Context(), a.ServerID)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	rootPw, err := s.st.Decrypt(sv.RootPasswordEnc)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "decrypt root password failed")
+		return
+	}
+	spec := sshx.UserSpec{Username: a.Username, Password: in.Password}
+	fp, err := s.exec.CreateUser(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), sv.HostKey, spec)
+	if err != nil {
+		s.markError(r, a.ID, err)
+		writeErr(w, http.StatusBadGateway, "change password failed")
+		return
+	}
+	s.persistHostKey(r.Context(), sv, fp)
+	enc, err := s.st.Encrypt([]byte(in.Password))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "encrypt failed")
+		return
+	}
+	if err := s.st.UpdateAccountPassword(r.Context(), a.ID, enc); err != nil {
+		writeErr(w, http.StatusInternalServerError, "persist failed")
+		return
+	}
+	a.Status = store.StatusActive
+	a.LastError = ""
+	_ = s.st.UpdateAccount(r.Context(), *a)
+	writeJSON(w, http.StatusOK, map[string]string{"ok": "true"})
+}
+
 func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	a, err := s.st.GetAccount(r.Context(), r.PathValue("id"))
 	if err != nil {
@@ -279,6 +346,9 @@ func hasPerm(perms []store.DirectoryPermission, p store.DirectoryPermission) boo
 func toStorePerms(in []permissionInput) []store.DirectoryPermission {
 	out := make([]store.DirectoryPermission, 0, len(in))
 	for _, p := range in {
+		if p.Path == "" {
+			continue
+		}
 		if p.Mode != store.ModeReadWrite && p.Mode != store.ModeReadOnly {
 			continue
 		}

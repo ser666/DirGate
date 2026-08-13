@@ -3,42 +3,110 @@
 {{template "head" .}}
 <body>
 {{template "nav" .}}
-<main>
-<h1>{{.Server.Name}} <small>{{.Server.Host}}:{{.Server.SSHPort}}</small></h1>
+<main class="shell">
+  <a class="back" href="/">← 返回服务器列表</a>
 
-<h2>账户</h2>
-<ul>
-{{range .Accounts}}
-  <li>{{.Username}} — 状态:{{.Status}}
-      {{if .CodingCapable}}[编码]{{end}}
-      {{if .ExposedToAgent}}[已暴露]{{end}}
-      <button hx-delete="/api/accounts/{{.ID}}" hx-confirm="确认删除?">删除</button>
-      <button hx-post="/api/accounts/{{.ID}}/provision" hx-target="closest li">重新建户</button>
-  </li>
-{{end}}
-</ul>
+  <div class="page-head">
+    <div>
+      <h1>{{.Server.Name}} <span class="mono" style="color:var(--muted);font-size:14px">{{.Server.Host}}:{{.Server.SSHPort}}</span></h1>
+      <p class="sub">root 用户 <span class="mono">{{.Server.RootUser}}</span></p>
+    </div>
+    <div class="right">
+      <button class="btn" data-action="test-server" data-id="{{.Server.ID}}" data-target="conn-result">测试连通</button>
+      <button class="btn btn-danger" data-action="delete-server" data-id="{{.Server.ID}}" data-confirm="删除该服务器，并远程删除其全部账户？">删除服务器</button>
+    </div>
+  </div>
 
-<h2>添加账户</h2>
-<form id="add-account">
-  <input name="username" placeholder="用户名" required>
-  <input name="password" type="password" placeholder="密码" required>
-  <label><input type="checkbox" name="coding_capable"> 编码能力</label>
-  <label><input type="checkbox" name="exposed_to_agent"> 暴露给 agent</label>
-  <input name="permissions" placeholder="权限 path=mode 逗号分隔，如 /data/a=rw,/data/b=ro">
-  <button type="submit">创建</button>
-</form>
+  <section class="card">
+    <h2 class="card-title">连通性</h2>
+    <div id="conn-result" class="conn-result">
+      {{if .Verified}}<span class="dot dot-ok"></span>已验证{{if .Server.HostKey}} · <span class="mono fp">{{.Server.HostKey}}</span>{{end}}{{else}}<span class="dot dot-dim"></span>尚未验证，点击「测试连通」以验证主机可达与 root 凭据{{end}}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 class="card-title">账户 <span class="count">{{len .Accounts}}</span></h2>
+    {{if .Accounts}}
+    <table class="table">
+      <thead>
+        <tr><th>用户名</th><th>状态</th><th>能力</th><th>目录权限</th><th class="right">操作</th></tr>
+      </thead>
+      <tbody>
+      {{range .Accounts}}
+        <tr>
+          <td><span class="mono" style="font-weight:700">{{.Username}}</span></td>
+          <td>
+            {{if eq .Status "active"}}<span class="badge badge-active">正常</span>
+            {{else if eq .Status "error"}}<span class="badge badge-error" title="{{.LastError}}">异常</span>
+            {{else}}<span class="badge badge-pending">待建户</span>{{end}}
+          </td>
+          <td>
+            <span class="flag {{if .CodingCapable}}on{{end}}" title="编码能力">编码</span>·
+            <span class="flag {{if .ExposedToAgent}}on{{end}}" title="暴露给 agent">暴露</span>
+          </td>
+          <td>
+            {{if .Permissions}}
+            <span class="perms">{{range .Permissions}}<span class="perm"><span class="path">{{.Path}}</span>=<span class="m {{.Mode}}">{{.Mode}}</span></span>{{end}}</span>
+            {{else}}<span class="mono" style="color:var(--muted)">—</span>{{end}}
+          </td>
+          <td class="right">
+            <details class="edit">
+              <summary class="btn btn-sm">改权限</summary>
+              <div class="panel">
+                <form class="perm-form" data-account="{{.ID}}">
+                  <div class="hint">逐目录授权，逗号分隔：<span class="mono">/data/a=rw,/data/b=ro</span></div>
+                  <div class="row">
+                    <input name="perms" value="{{.PermSpec}}" placeholder="/data/a=rw,/data/b=ro">
+                    <button type="submit" class="btn btn-sm btn-primary">保存</button>
+                  </div>
+                  <span class="msg"></span>
+                </form>
+              </div>
+            </details>
+            <details class="edit">
+              <summary class="btn btn-sm">改密码</summary>
+              <div class="panel">
+                <form class="pwd-form" data-account="{{.ID}}">
+                  <div class="row">
+                    <input name="password" type="password" placeholder="新密码" autocomplete="new-password">
+                    <button type="submit" class="btn btn-sm btn-primary">重置</button>
+                  </div>
+                  <span class="msg"></span>
+                </form>
+              </div>
+            </details>
+            <button class="btn btn-sm" data-action="provision" data-id="{{.ID}}">重新建户</button>
+            <button class="btn btn-sm btn-danger" data-action="delete-account" data-id="{{.ID}}" data-confirm="删除账户 {{.Username}}，并远程删除该 OS 用户？">删除</button>
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">还没有账户。在下方为这台服务器创建第一个编码账户。</p>
+    {{end}}
+  </section>
+
+  <section class="card">
+    <h2 class="card-title">新建账户</h2>
+    <form id="add-account" class="form grid">
+      <label>用户名<input name="username" placeholder="如 coder1" required></label>
+      <label>密码<input name="password" type="password" required></label>
+      <label>目录权限<span class="hint" style="font-weight:400;color:var(--muted)">逗号分隔 <span class="mono">/data/a=rw,/data/b=ro</span></span><input name="permissions" placeholder="/data/a=rw,/data/b=ro"></label>
+      <label class="check"><input type="checkbox" name="coding_capable" checked> 编码能力</label>
+      <label class="check"><input type="checkbox" name="exposed_to_agent" checked> 暴露给 agent</label>
+      <div class="form-actions"><button type="submit" class="btn btn-primary">创建账户</button></div>
+    </form>
+    <p class="hint" style="margin:10px 0 0;font-size:12px;color:var(--muted)">若用户名在服务器上已存在，将重置其密码并应用上方权限（幂等）。</p>
+  </section>
 </main>
 <script>
 salSubmit('add-account', '/api/servers/{{.Server.ID}}/accounts', function (fd) {
-  var perms = (fd.get('permissions') || '').split(',').filter(Boolean).map(function (s) {
-    var kv = s.split('=');
-    return { path: kv[0].trim(), mode: (kv[1] || 'rw').trim() };
-  });
   return {
     username: fd.get('username'), password: fd.get('password'),
     coding_capable: fd.get('coding_capable') === 'on',
     exposed_to_agent: fd.get('exposed_to_agent') === 'on',
-    permissions: perms
+    permissions: parsePerms(fd.get('permissions'))
   };
 });
 </script>

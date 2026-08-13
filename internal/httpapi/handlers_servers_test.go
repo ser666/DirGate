@@ -3,9 +3,13 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"serveragentlink/internal/store"
 )
 
 func TestCreateAndListServers(t *testing.T) {
@@ -139,5 +143,84 @@ func TestDeleteServerRemoteFailureKeepsRecord(t *testing.T) {
 	}
 	if _, err := srv.st.GetServer(context.Background(), sv.ID); err != nil {
 		t.Fatalf("server should be kept: %v", err)
+	}
+}
+
+func TestServerDetailPageRendersAccountsAndPerms(t *testing.T) {
+	srv := newTestServer(t)
+	h := srv.Handler()
+
+	sv, _ := srv.st.CreateServer(context.Background(), "dev1", "10.0.0.5", 22, "root", "rootpw")
+	a, _ := srv.st.CreateAccount(context.Background(), sv.ID, "alice", "pw", true, true)
+	_ = srv.st.SetPermissions(context.Background(), a.ID, []store.DirectoryPermission{{Path: "/data/repo", Mode: store.ModeReadWrite}})
+
+	session := login(t, srv, h)
+	req := httptest.NewRequest("GET", "/servers/"+sv.ID, nil)
+	req.AddCookie(session)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"alice", "/data/repo", "rw", "返回服务器列表", "改权限", "改密码"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in rendered page:\n%s", want, body)
+		}
+	}
+}
+
+func TestTestServerConnectionSuccess(t *testing.T) {
+	srv := newTestServer(t)
+	srv.exec = &fakeExec{}
+	h := srv.Handler()
+
+	sv, _ := srv.st.CreateServer(context.Background(), "dev1", "10.0.0.5", 22, "root", "rootpw")
+
+	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/test", []byte(`{}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body)
+	}
+	var out struct {
+		Connected bool   `json:"connected"`
+		HostKey   string `json:"host_key"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || !out.Connected || out.HostKey != "fp" {
+		t.Fatalf("out=%+v err=%v", out, err)
+	}
+	got, _ := srv.st.GetServer(context.Background(), sv.ID)
+	if got.HostKey != "fp" {
+		t.Fatalf("host key not persisted: %q", got.HostKey)
+	}
+	if got.LastVerifiedAt == "" {
+		t.Fatal("last_verified_at should be set")
+	}
+}
+
+func TestTestServerConnectionFailure(t *testing.T) {
+	srv := newTestServer(t)
+	srv.exec = &failExec{err: fmt.Errorf("dial tcp: connection refused")}
+	h := srv.Handler()
+
+	sv, _ := srv.st.CreateServer(context.Background(), "dev1", "10.0.0.5", 22, "root", "rootpw")
+
+	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/test", []byte(`{}`))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body)
+	}
+	var out struct {
+		Connected bool   `json:"connected"`
+		Error     string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || out.Connected {
+		t.Fatalf("out=%+v err=%v", out, err)
+	}
+	got, _ := srv.st.GetServer(context.Background(), sv.ID)
+	if got.HostKey != "" || got.LastVerifiedAt != "" {
+		t.Fatalf("failure must not persist: host_key=%q verified_at=%q", got.HostKey, got.LastVerifiedAt)
 	}
 }

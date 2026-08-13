@@ -76,8 +76,24 @@ func shq(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
-// Executor 为空结构体，方法集即建户/删户/改权限；便于 httpapi 层做接口注入与 fake。
+// Executor 为空结构体，方法集即建户/删户/改权限/连通性测试；便于 httpapi 层做接口注入与 fake。
 type Executor struct{}
+
+// TestConnection 拨号并执行一条无害命令，验证主机可达、root 凭据正确、主机指纹匹配，
+// 返回观察到的 SSH 主机指纹（供调用方回写 TOFU 记录）。不创建任何用户。
+func (x *Executor) TestConnection(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
+	defer cancel()
+	c, fp, err := Dial(host, port, rootUser, rootPassword, knownHost)
+	if err != nil {
+		return "", err
+	}
+	defer c.Close()
+	if _, err := c.Run(ctx, "echo ok"); err != nil {
+		return "", fmt.Errorf("test connection: %w", err)
+	}
+	return fp, nil
+}
 
 // CreateUser 建户并返回观察到的 SSH 主机指纹（供调用方回写 TOFU 记录）。
 func (x *Executor) CreateUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec UserSpec) (string, error) {
