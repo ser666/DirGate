@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 )
 
@@ -18,6 +19,9 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
+	if err := LoadDotEnv(); err != nil {
+		return nil, fmt.Errorf("load .env: %w", err)
+	}
 	c := &Config{
 		ListenAddr:    getenv("SAL_LISTEN_ADDR", ":8080"),
 		DataDir:       getenv("SAL_DATA_DIR", "./data"),
