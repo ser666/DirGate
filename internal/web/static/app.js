@@ -95,6 +95,16 @@ document.addEventListener('click', function (ev) {
   if (action === 'test-server') { salTest(btn); return; }
 
   var id = btn.getAttribute('data-id');
+  if (action === 'toggle-flag') {
+    var flag = btn.getAttribute('data-flag');
+    var body = {};
+    body[flag] = !btn.classList.contains('on');
+    salFetch('PUT', '/api/accounts/' + id, body)
+      .then(function () { location.reload(); })
+      .catch(function (err) { alert('操作失败：' + err.message); });
+    return;
+  }
+
   var url = '', method = 'POST';
   if (action === 'delete-server') { url = '/api/servers/' + id; method = 'DELETE'; }
   else if (action === 'delete-account') { url = '/api/accounts/' + id; method = 'DELETE'; }

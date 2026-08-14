@@ -12,7 +12,7 @@ func TestParseTemplates(t *testing.T) {
 	}
 	tests := map[string]any{
 		"login":         map[string]any{"Authed": false},
-		"servers":       map[string]any{"Authed": true, "Servers": []map[string]any{}},
+		"servers":       map[string]any{"Authed": true, "Servers": []map[string]any{}, "Exposed": []map[string]any{}},
 		"server_detail": map[string]any{"Authed": true, "Server": map[string]any{"Name": "n", "Host": "h", "SSHPort": 22}, "Accounts": []map[string]any{}},
 	}
 	for name, data := range tests {

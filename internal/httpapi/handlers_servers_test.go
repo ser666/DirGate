@@ -170,6 +170,35 @@ func TestServerDetailPageRendersAccountsAndPerms(t *testing.T) {
 	}
 }
 
+func TestServersPageListsExposedAccounts(t *testing.T) {
+	srv := newTestServer(t)
+	h := srv.Handler()
+
+	sv, _ := srv.st.CreateServer(context.Background(), "dev1", "10.0.0.5", 22, "root", "rootpw")
+	a, _ := srv.st.CreateAccount(context.Background(), sv.ID, "coder1", "pw", true, true)
+	_ = srv.st.SetPermissions(context.Background(), a.ID, []store.DirectoryPermission{{Path: "/data/repo", Mode: store.ModeReadWrite}})
+	// 未暴露的账户不应出现在首页概览里。
+	_, _ = srv.st.CreateAccount(context.Background(), sv.ID, "hidden", "pw", false, false)
+
+	session := login(t, srv, h)
+	req := httptest.NewRequest("GET", "/", nil)
+	req.AddCookie(session)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"已暴露给 agent 的账户", "coder1", "dev1", "10.0.0.5", "/data/repo", "rw"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in rendered homepage:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "hidden") {
+		t.Fatalf("non-exposed account must not appear in exposed overview:\n%s", body)
+	}
+}
+
 func TestTestServerConnectionSuccess(t *testing.T) {
 	srv := newTestServer(t)
 	srv.exec = &fakeExec{}

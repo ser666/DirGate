@@ -50,6 +50,31 @@
     <p class="empty">还没有服务器。在上方添加第一台目标服务器。</p>
     {{end}}
   </section>
+
+  <section class="card">
+    <h2 class="card-title">已暴露给 agent 的账户 <span class="count">{{len .Exposed}}</span></h2>
+    <p class="sub" style="margin:0 0 10px">这些账户的 SSH 凭据会通过 MCP 提供给 agent；在服务器详情页点账户行的「暴露」即可开关。</p>
+    {{if .Exposed}}
+    <table class="table">
+      <thead>
+        <tr><th>服务器</th><th>主机</th><th>账户</th><th>编码</th><th>目录权限</th></tr>
+      </thead>
+      <tbody>
+      {{range .Exposed}}
+        <tr>
+          <td><a class="mono" href="/servers/{{.ServerID}}">{{.ServerName}}</a></td>
+          <td><span class="mono">{{.Host}}:{{.SSHPort}}</span></td>
+          <td><span class="mono" style="font-weight:700">{{.Username}}</span></td>
+          <td>{{if .CodingCapable}}<span class="flag on">编码</span>{{else}}<span class="flag">—</span>{{end}}</td>
+          <td>{{if .Directories}}<span class="mono">{{.DirSpec}}</span>{{else}}<span class="mono" style="color:var(--muted)">—</span>{{end}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="empty">暂无暴露给 agent 的账户。进入某台服务器，点账户行的「暴露」开关即可。</p>
+    {{end}}
+  </section>
 </main>
 <script>
 salSubmit('add-server', '/api/servers', function (fd) {

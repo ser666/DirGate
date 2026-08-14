@@ -29,6 +29,26 @@ func (a accountView) PermSpec() string {
 	return strings.Join(parts, ",")
 }
 
+// exposedAccountView 是首页「已暴露给 agent」概览的行视图，只含展示字段，不含凭据密文。
+type exposedAccountView struct {
+	ServerID      string
+	ServerName    string
+	Host          string
+	SSHPort       int
+	Username      string
+	CodingCapable bool
+	Directories   []store.DirectoryPermission
+}
+
+// DirSpec 把目录权限渲染为紧凑串，用于首页概览表格展示。
+func (e exposedAccountView) DirSpec() string {
+	parts := make([]string, 0, len(e.Directories))
+	for _, p := range e.Directories {
+		parts = append(parts, p.Path+"="+p.Mode)
+	}
+	return strings.Join(parts, ",")
+}
+
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "login", map[string]any{"Authed": false})
 }
@@ -44,7 +64,20 @@ func (s *Server) handleServersPage(w http.ResponseWriter, r *http.Request) {
 			Verified:     sv.HostKey != "",
 		})
 	}
-	s.render(w, "servers", map[string]any{"Authed": true, "Servers": views})
+	exposed, _ := s.st.ListExposedAccounts(r.Context())
+	expViews := make([]exposedAccountView, 0, len(exposed))
+	for _, e := range exposed {
+		expViews = append(expViews, exposedAccountView{
+			ServerID:      e.ServerID,
+			ServerName:    e.ServerName,
+			Host:          e.Host,
+			SSHPort:       e.SSHPort,
+			Username:      e.Username,
+			CodingCapable: e.CodingCapable,
+			Directories:   e.Directories,
+		})
+	}
+	s.render(w, "servers", map[string]any{"Authed": true, "Servers": views, "Exposed": expViews})
 }
 
 func (s *Server) handleServerPage(w http.ResponseWriter, r *http.Request) {

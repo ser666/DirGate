@@ -37,12 +37,12 @@
           <td><span class="mono" style="font-weight:700">{{.Username}}</span></td>
           <td>
             {{if eq .Status "active"}}<span class="badge badge-active">正常</span>
-            {{else if eq .Status "error"}}<span class="badge badge-error" title="{{.LastError}}">异常</span>
+            {{else if eq .Status "error"}}<span class="badge badge-error">异常</span>{{if .LastError}}<div class="err-hint">{{.LastError}}</div>{{end}}
             {{else}}<span class="badge badge-pending">待建户</span>{{end}}
           </td>
           <td>
-            <span class="flag {{if .CodingCapable}}on{{end}}" title="编码能力">编码</span>·
-            <span class="flag {{if .ExposedToAgent}}on{{end}}" title="暴露给 agent">暴露</span>
+            <button class="flag {{if .CodingCapable}}on{{end}}" data-action="toggle-flag" data-id="{{.ID}}" data-flag="coding_capable" title="点击切换「编码能力」">编码</button>
+            <button class="flag {{if .ExposedToAgent}}on{{end}}" data-action="toggle-flag" data-id="{{.ID}}" data-flag="exposed_to_agent" title="点击切换「暴露给 agent」">暴露</button>
           </td>
           <td>
             {{if .Permissions}}
@@ -90,8 +90,8 @@
   <section class="card">
     <h2 class="card-title">新建账户</h2>
     <form id="add-account" class="form grid">
-      <label>用户名<input name="username" placeholder="如 coder1" required></label>
-      <label>密码<input name="password" type="password" required></label>
+      <label>用户名<input name="username" placeholder="如 coder1" autocomplete="off" required></label>
+      <label>密码<input name="password" type="password" autocomplete="new-password" required></label>
       <label>目录权限<span class="hint" style="font-weight:400;color:var(--muted)">逗号分隔 <span class="mono">/data/a=rw,/data/b=ro</span></span><input name="permissions" placeholder="/data/a=rw,/data/b=ro"></label>
       <label class="check"><input type="checkbox" name="coding_capable" checked> 编码能力</label>
       <label class="check"><input type="checkbox" name="exposed_to_agent" checked> 暴露给 agent</label>
