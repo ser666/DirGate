@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -74,6 +75,13 @@ func (c *Client) RunStdin(ctx context.Context, cmd, stdinData string) (string, e
 	ch := make(chan result, 1)
 	go func() {
 		out, err := sess.Output(cmd)
+		// 远端命令失败时把其 stdout/stderr 并入错误，避免只剩含糊的 "Process exited with status N"，
+		// 使建户/改权限失败的真实原因（如 Permission denied、目录不存在）能被回传并展示。
+		if err != nil {
+			if o := strings.TrimSpace(string(out)); o != "" {
+				err = fmt.Errorf("%w: %s", err, o)
+			}
+		}
 		ch <- result{out: string(out), err: err}
 	}()
 

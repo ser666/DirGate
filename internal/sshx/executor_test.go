@@ -10,9 +10,9 @@ func TestBuildCreateScriptACL(t *testing.T) {
 		Permissions: []PermissionSpec{{Path: "/data/a", Mode: "rw"}, {Path: "/data/b", Mode: "ro"}}}
 	script := BuildCreateScript(u)
 	for _, want := range []string{
-		"id 'alice'", "useradd -m -s /bin/bash 'alice'", "chpasswd",
-		"setfacl -m u:'alice':rwx '/data/a'", "setfacl -m d:u:'alice':rwx '/data/a'",
-		"setfacl -m u:'alice':rx '/data/b'", "setfacl -m d:u:'alice':rx '/data/b'",
+		"id 'alice'", "$SUDO useradd -m -s /bin/bash 'alice'", "$SUDO chpasswd",
+		"$SUDO setfacl -m u:'alice':rwx '/data/a'", "$SUDO setfacl -m d:u:'alice':rwx '/data/a'",
+		"$SUDO setfacl -m u:'alice':rx '/data/b'", "$SUDO setfacl -m d:u:'alice':rx '/data/b'",
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("script missing %q:\n%s", want, script)
@@ -30,14 +30,14 @@ func TestBuildCreateScriptIdempotent(t *testing.T) {
 	if strings.Contains(script, "&& exit 0") {
 		t.Fatalf("create script must not early-exit on existing user:\n%s", script)
 	}
-	if !strings.Contains(script, "id 'alice' >/dev/null 2>&1 || useradd -m -s /bin/bash 'alice'") {
+	if !strings.Contains(script, "id 'alice' >/dev/null 2>&1 || $SUDO useradd -m -s /bin/bash 'alice'") {
 		t.Fatalf("useradd must be guarded by || (idempotent create):\n%s", script)
 	}
 	// chpasswd 与 ACL 必须位于 useradd 之后且始终存在。
 	if strings.Index(script, "chpasswd") < strings.Index(script, "useradd") {
 		t.Fatalf("chpasswd must follow useradd:\n%s", script)
 	}
-	if !strings.Contains(script, "setfacl -m u:'alice':rwx '/d'") {
+	if !strings.Contains(script, "$SUDO setfacl -m u:'alice':rwx '/d'") {
 		t.Fatalf("missing ACL line:\n%s", script)
 	}
 }
@@ -53,7 +53,7 @@ func TestBuildCreateScriptQuotesPasswordOffCommandLine(t *testing.T) {
 
 func TestBuildDeleteScript(t *testing.T) {
 	script := BuildDeleteScript("alice")
-	if !strings.Contains(script, "userdel -r 'alice'") {
+	if !strings.Contains(script, "$SUDO userdel -r 'alice'") {
 		t.Fatalf("missing userdel:\n%s", script)
 	}
 	// 幂等：用户不存在时静默成功（exit 0），避免重试时误报失败。
@@ -71,11 +71,11 @@ func TestBuildUpdateScriptRevokesRemoved(t *testing.T) {
 	script := BuildUpdateScript(spec)
 	// 撤销旧目录 ACL（幂等，容忍不存在）。
 	for _, want := range []string{
-		"setfacl -x u:'alice' '/data/a'",
-		"setfacl -x d:u:'alice' '/data/a'",
+		"$SUDO setfacl -x u:'alice' '/data/a'",
+		"$SUDO setfacl -x d:u:'alice' '/data/a'",
 		// 新增目录 ACL。
-		"setfacl -m u:'alice':rx '/data/b'",
-		"setfacl -m d:u:'alice':rx '/data/b'",
+		"$SUDO setfacl -m u:'alice':rx '/data/b'",
+		"$SUDO setfacl -m d:u:'alice':rx '/data/b'",
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("update script missing %q:\n%s", want, script)
@@ -84,5 +84,23 @@ func TestBuildUpdateScriptRevokesRemoved(t *testing.T) {
 	// 撤销行必须先于新增行，避免同一目录先加后删。
 	if strings.Index(script, "setfacl -x") > strings.Index(script, "setfacl -m") {
 		t.Fatalf("revoke must precede grant:\n%s", script)
+	}
+}
+
+func TestBuildScriptsAutoSudo(t *testing.T) {
+	// 三种脚本都须包含「非 root 则 sudo -n 提权」的探测，使以普通 sudo 账户（非 uid 0）
+	// 登录时 useradd/chpasswd/setfacl/userdel 仍能获得特权。
+	scripts := []string{
+		BuildCreateScript(UserSpec{Username: "alice", Permissions: []PermissionSpec{{Path: "/d", Mode: "rw"}}}),
+		BuildDeleteScript("alice"),
+		BuildUpdateScript(UserSpec{Username: "alice", Permissions: []PermissionSpec{{Path: "/d", Mode: "rw"}}}),
+	}
+	for i, s := range scripts {
+		if !strings.Contains(s, `if [ "$(id -u)" != "0" ]; then SUDO="sudo -n"; fi`) {
+			t.Fatalf("script[%d] missing sudo probe:\n%s", i, s)
+		}
+		if !strings.Contains(s, "$SUDO") {
+			t.Fatalf("script[%d] never uses $SUDO:\n%s", i, s)
+		}
 	}
 }

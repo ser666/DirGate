@@ -11,6 +11,14 @@ import (
 // TCP 拨号/握手另由 Dial 的 cfg.Timeout（10s）控制。
 const commandTimeout = 60 * time.Second
 
+// sudoProbe 在脚本开头判定当前 SSH 登录身份：root（uid 0）直接执行，否则用 `sudo -n` 提权。
+// 这样既能以真实 root 运行（不依赖 sudo 是否安装），也能以带 sudo 权限的普通账户运行。
+// `-n` 非交互模式：若 sudo 需要密码则立即报错，避免在无 TTY 的 exec 通道里读取 stdin 提示密码、
+// 从而与 chpasswd 的「username:password」stdin 输入相混淆。
+const sudoProbe = `SUDO=""
+if [ "$(id -u)" != "0" ]; then SUDO="sudo -n"; fi
+`
+
 type PermissionSpec struct {
 	Path string
 	Mode string // "rw" | "ro"
@@ -31,8 +39,9 @@ type UserSpec struct {
 func BuildCreateScript(u UserSpec) string {
 	var b strings.Builder
 	b.WriteString("set -e\n")
-	b.WriteString(fmt.Sprintf("id %s >/dev/null 2>&1 || useradd -m -s /bin/bash %s\n", shq(u.Username), shq(u.Username)))
-	b.WriteString("chpasswd\n")
+	b.WriteString(sudoProbe)
+	b.WriteString(fmt.Sprintf("id %s >/dev/null 2>&1 || $SUDO useradd -m -s /bin/bash %s\n", shq(u.Username), shq(u.Username)))
+	b.WriteString("$SUDO chpasswd\n")
 	for _, p := range u.Permissions {
 		b.WriteString(permLines(u.Username, p))
 	}
@@ -41,20 +50,26 @@ func BuildCreateScript(u UserSpec) string {
 
 func permLines(username string, p PermissionSpec) string {
 	if p.Mode == "rw" {
-		return fmt.Sprintf("setfacl -m u:%s:rwx %s\nsetfacl -m d:u:%s:rwx %s\n",
+		return fmt.Sprintf("$SUDO setfacl -m u:%s:rwx %s\n$SUDO setfacl -m d:u:%s:rwx %s\n",
 			shq(username), shq(p.Path), shq(username), shq(p.Path))
 	}
-	return fmt.Sprintf("setfacl -m u:%s:rx %s\nsetfacl -m d:u:%s:rx %s\n",
+	return fmt.Sprintf("$SUDO setfacl -m u:%s:rx %s\n$SUDO setfacl -m d:u:%s:rx %s\n",
 		shq(username), shq(p.Path), shq(username), shq(p.Path))
 }
 
 func BuildDeleteScript(username string) string {
-	return fmt.Sprintf("set -e\nid %s >/dev/null 2>&1 || exit 0\nuserdel -r %s\n", shq(username), shq(username))
+	var b strings.Builder
+	b.WriteString("set -e\n")
+	b.WriteString(sudoProbe)
+	b.WriteString(fmt.Sprintf("id %s >/dev/null 2>&1 || exit 0\n", shq(username)))
+	b.WriteString(fmt.Sprintf("$SUDO userdel -r %s\n", shq(username)))
+	return b.String()
 }
 
 func BuildUpdateScript(spec UserSpec) string {
 	var b strings.Builder
 	b.WriteString("set -e\n")
+	b.WriteString(sudoProbe)
 	for _, p := range spec.Removed {
 		b.WriteString(revokeLines(spec.Username, p))
 	}
@@ -67,7 +82,7 @@ func BuildUpdateScript(spec UserSpec) string {
 // revokeLines 撤销某目录上用户已有的 ACL。
 // 用 `|| true` 容忍目标条目不存在，保持脚本幂等且不因 set -e 中断。
 func revokeLines(username string, p PermissionSpec) string {
-	return fmt.Sprintf("setfacl -x u:%s %s 2>/dev/null || true\nsetfacl -x d:u:%s %s 2>/dev/null || true\n",
+	return fmt.Sprintf("$SUDO setfacl -x u:%s %s 2>/dev/null || true\n$SUDO setfacl -x d:u:%s %s 2>/dev/null || true\n",
 		shq(username), shq(p.Path), shq(username), shq(p.Path))
 }
 
