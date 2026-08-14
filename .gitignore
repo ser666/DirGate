@@ -24,3 +24,7 @@ server-agent-link
 *.swo
 .idea/
 .vscode/
+
+# 内部/个人文档（不进仓库；项目手册 使用说明.md 仍保留跟踪）
+docs/superpowers/
+docs/GIT_PROXY_SETUP.md
