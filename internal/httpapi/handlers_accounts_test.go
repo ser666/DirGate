@@ -17,6 +17,7 @@ type fakeExec struct {
 	updated *sshx.UserSpec
 	deleted int
 	tested  int
+	locked  int
 }
 
 func (f *fakeExec) CreateUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error) {
@@ -35,6 +36,10 @@ func (f *fakeExec) TestConnection(ctx context.Context, host string, port int, ro
 	f.tested++
 	return "fp", nil
 }
+func (f *fakeExec) LockUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost, username string) (string, error) {
+	f.locked++
+	return "fp", nil
+}
 
 type failExec struct{ err error }
 
@@ -48,6 +53,9 @@ func (f *failExec) UpdatePermissions(ctx context.Context, host string, port int,
 	return "", f.err
 }
 func (f *failExec) TestConnection(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string) (string, error) {
+	return "", f.err
+}
+func (f *failExec) LockUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost, username string) (string, error) {
 	return "", f.err
 }
 
@@ -99,7 +107,7 @@ func TestUpdateAccountFlags(t *testing.T) {
 		t.Fatalf("update code=%d body=%s", rec.Code, rec.Body)
 	}
 
-	exposed, _ := srv.st.ListExposedAccounts(context.Background())
+	exposed, _ := srv.st.ListExposedAccounts(context.Background(), "9999-01-01T00:00:00Z")
 	if len(exposed) != 1 || !exposed[0].CodingCapable {
 		t.Fatalf("exposed=%+v", exposed)
 	}

@@ -39,7 +39,8 @@ func TestAccountCRUDAndPermissions(t *testing.T) {
 		t.Fatalf("replace failed: %+v", got)
 	}
 
-	exposed, _ := s.ListExposedAccounts(ctx)
+	now := "2026-01-01T00:00:00Z"
+	exposed, _ := s.ListExposedAccounts(ctx, now)
 	if len(exposed) != 1 {
 		t.Fatalf("exposed len=%d", len(exposed))
 	}
@@ -50,9 +51,19 @@ func TestAccountCRUDAndPermissions(t *testing.T) {
 	// 取消暴露后不再返回
 	a.ExposedToAgent = false
 	_ = s.UpdateAccount(ctx, *a)
-	exposed, _ = s.ListExposedAccounts(ctx)
+	exposed, _ = s.ListExposedAccounts(ctx, now)
 	if len(exposed) != 0 {
 		t.Fatalf("expected 0 exposed")
+	}
+	a.ExposedToAgent = true
+	_ = s.UpdateAccount(ctx, *a)
+
+	// 到期账户不再暴露
+	a.ExpiresAt = "2025-12-31T23:59:59Z"
+	_ = s.UpdateAccount(ctx, *a)
+	exposed, _ = s.ListExposedAccounts(ctx, now)
+	if len(exposed) != 0 {
+		t.Fatalf("expected expired account hidden, got %d", len(exposed))
 	}
 
 	if err := s.DeleteAccount(ctx, a.ID); err != nil {

@@ -21,10 +21,10 @@ func (s *Store) CreateAccount(ctx context.Context, serverID, username, password 
 		CodingCapable: codingCapable, ExposedToAgent: exposed, Status: StatusPending,
 		CreatedAt: now, UpdatedAt: now}
 	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO accounts (id,server_id,username,password_enc,coding_capable,exposed_to_agent,status,last_error,created_at,updated_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		`INSERT INTO accounts (id,server_id,username,password_enc,coding_capable,exposed_to_agent,status,last_error,expires_at,created_at,updated_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
 		a.ID, a.ServerID, a.Username, a.PasswordEnc, boolInt(a.CodingCapable), boolInt(a.ExposedToAgent),
-		a.Status, a.LastError, a.CreatedAt, a.UpdatedAt)
+		a.Status, a.LastError, a.ExpiresAt, a.CreatedAt, a.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -33,14 +33,14 @@ func (s *Store) CreateAccount(ctx context.Context, serverID, username, password 
 
 func (s *Store) GetAccount(ctx context.Context, id string) (*Account, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id,server_id,username,password_enc,coding_capable,exposed_to_agent,status,last_error,created_at,updated_at
+		`SELECT id,server_id,username,password_enc,coding_capable,exposed_to_agent,status,last_error,expires_at,created_at,updated_at
 		 FROM accounts WHERE id=?`, id)
 	return scanAccount(row)
 }
 
 func (s *Store) ListAccounts(ctx context.Context, serverID string) ([]Account, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id,server_id,username,password_enc,coding_capable,exposed_to_agent,status,last_error,created_at,updated_at
+		`SELECT id,server_id,username,password_enc,coding_capable,exposed_to_agent,status,last_error,expires_at,created_at,updated_at
 		 FROM accounts WHERE server_id=? ORDER BY username`, serverID)
 	if err != nil {
 		return nil, err
@@ -57,12 +57,19 @@ func (s *Store) ListAccounts(ctx context.Context, serverID string) ([]Account, e
 	return out, rows.Err()
 }
 
+// UpdateAccount 只更新标志与状态列，不触碰密码密文，避免读-改-写覆盖并发变更。
 func (s *Store) UpdateAccount(ctx context.Context, a Account) error {
-	a.UpdatedAt = nowUTC()
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE accounts SET coding_capable=?,exposed_to_agent=?,status=?,last_error=?,updated_at=? WHERE id=?`,
-		boolInt(a.CodingCapable), boolInt(a.ExposedToAgent), a.Status, a.LastError, a.UpdatedAt, a.ID)
-	return err
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE accounts SET coding_capable=?,exposed_to_agent=?,status=?,last_error=?,expires_at=?,updated_at=? WHERE id=?`,
+		boolInt(a.CodingCapable), boolInt(a.ExposedToAgent), a.Status, a.LastError, a.ExpiresAt, nowUTC(), a.ID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // UpdateAccountPassword 单独更新账户的加密密码（不触碰其它字段，供「改密码」使用）。
@@ -77,6 +84,73 @@ func (s *Store) UpdateAccountPassword(ctx context.Context, id string, passwordEn
 		return ErrNotFound
 	}
 	return nil
+}
+
+// MarkAccountLocked 到期回收用：锁定 OS 账户后记录状态。
+func (s *Store) MarkAccountLocked(ctx context.Context, id, reason string) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE accounts SET status=?, last_error=?, updated_at=? WHERE id=?`,
+		StatusLocked, reason, nowUTC(), id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// MarkAccountError 只写状态与错误信息，避免读-改-写覆盖并发的标志位变更。
+func (s *Store) MarkAccountError(ctx context.Context, id, msg string) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE accounts SET status=?, last_error=?, updated_at=? WHERE id=?`,
+		StatusError, msg, nowUTC(), id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// MarkAccountActive provision 成功后清除错误状态（不改标志位/密码）。
+func (s *Store) MarkAccountActive(ctx context.Context, id string) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE accounts SET status=?, last_error='', updated_at=? WHERE id=?`,
+		StatusActive, nowUTC(), id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ListExpiringAccounts 返回已到期（expires_at 非空且已过）且尚未锁定的账户，
+// 供回收器逐个锁定 OS 用户。
+func (s *Store) ListExpiringAccounts(ctx context.Context, now string) ([]Account, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id,server_id,username,password_enc,coding_capable,exposed_to_agent,status,last_error,expires_at,created_at,updated_at
+		 FROM accounts WHERE expires_at != '' AND expires_at <= ? AND status != ?`,
+		now, StatusLocked)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Account
+	for rows.Next() {
+		a, err := scanAccount(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *a)
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) DeleteAccount(ctx context.Context, id string) error {
@@ -132,11 +206,18 @@ func (s *Store) ListPermissions(ctx context.Context, accountID string) ([]Direct
 	return out, rows.Err()
 }
 
-func (s *Store) ListExposedAccounts(ctx context.Context) ([]ExposedAccount, error) {
+// ListExposedAccounts 一次性 JOIN 取出暴露账户及其目录权限，供 MCP 与首页概览复用；
+// 到期账户（expires_at 已过）不再暴露。
+func (s *Store) ListExposedAccounts(ctx context.Context, now string) ([]ExposedAccount, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT sv.id, sv.name, sv.host, sv.ssh_port, a.id, a.username, a.password_enc, a.coding_capable
-		 FROM accounts a JOIN servers sv ON sv.id = a.server_id
-		 WHERE a.exposed_to_agent = 1 AND sv.enabled = 1 ORDER BY sv.name, a.username`)
+		`SELECT sv.id, sv.name, sv.host, sv.ssh_port, a.id, a.username, a.password_enc, a.coding_capable,
+		        p.path, p.mode
+		 FROM accounts a
+		 JOIN servers sv ON sv.id = a.server_id
+		 LEFT JOIN directory_permissions p ON p.account_id = a.id
+		 WHERE a.exposed_to_agent = 1 AND sv.enabled = 1
+		   AND (a.expires_at = '' OR a.expires_at > ?)
+		 ORDER BY sv.name, a.username, p.path`, now)
 	if err != nil {
 		return nil, err
 	}
@@ -145,16 +226,20 @@ func (s *Store) ListExposedAccounts(ctx context.Context) ([]ExposedAccount, erro
 	for rows.Next() {
 		var e ExposedAccount
 		var coding int
+		var path, mode sql.NullString
 		if err := rows.Scan(&e.ServerID, &e.ServerName, &e.Host, &e.SSHPort, &e.AccountID,
-			&e.Username, &e.PasswordEnc, &coding); err != nil {
+			&e.Username, &e.PasswordEnc, &coding, &path, &mode); err != nil {
 			return nil, err
 		}
 		e.CodingCapable = coding == 1
-		perms, err := s.ListPermissions(ctx, e.AccountID)
-		if err != nil {
-			return nil, err
+		if path.Valid { // LEFT JOIN 无权限的账户只有一行 NULL
+			e.Directories = append(e.Directories, DirectoryPermission{Path: path.String, Mode: mode.String})
 		}
-		e.Directories = perms
+		// 同一账户的多行权限合并进已出现的条目。
+		if n := len(out); n > 0 && out[n-1].AccountID == e.AccountID {
+			out[n-1].Directories = append(out[n-1].Directories, e.Directories...)
+			continue
+		}
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -164,7 +249,7 @@ func scanAccount(r rowScanner) (*Account, error) {
 	var a Account
 	var coding, exposed int
 	err := r.Scan(&a.ID, &a.ServerID, &a.Username, &a.PasswordEnc, &coding, &exposed,
-		&a.Status, &a.LastError, &a.CreatedAt, &a.UpdatedAt)
+		&a.Status, &a.LastError, &a.ExpiresAt, &a.CreatedAt, &a.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}

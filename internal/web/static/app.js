@@ -116,7 +116,7 @@ document.addEventListener('click', function (ev) {
     .catch(function (err) { alert('操作失败：' + err.message); });
 });
 
-// 行内「改权限」与「改密码」表单。
+// 行内「改权限」「改密码」与「到期」表单。
 document.addEventListener('submit', function (ev) {
   var f = ev.target;
   if (f.classList.contains('perm-form')) {
@@ -134,5 +134,12 @@ document.addEventListener('submit', function (ev) {
     salFetch('PUT', '/api/accounts/' + f.getAttribute('data-account') + '/password', { password: pw })
       .then(function () { m2.textContent = '已更新'; m2.classList.remove('err'); f.elements['password'].value = ''; })
       .catch(function (err) { m2.textContent = '失败：' + err.message; m2.classList.add('err'); });
+  } else if (f.classList.contains('exp-form')) {
+    ev.preventDefault();
+    var m3 = f.querySelector('.msg');
+    salFetch('PUT', '/api/accounts/' + f.getAttribute('data-account'),
+      { expires_at: (f.elements['expires_at'].value || '').trim() })
+      .then(function () { location.reload(); })
+      .catch(function (err) { m3.textContent = '失败：' + err.message; m3.classList.add('err'); });
   }
 });

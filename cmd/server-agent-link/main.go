@@ -50,6 +50,8 @@ func main() {
 
 	secureCookies := cfg.TLSCert != ""
 	srv := httpapi.New(st, key, cfg.AdminUser, exec, mcpHandler, secureCookies)
+	// 到期账户自动回收：每 10 分钟扫描，锁定到期 OS 账户并停止 MCP 暴露。
+	srv.StartExpirySweeper(ctx)
 
 	if cfg.TLSCert != "" {
 		log.Printf("listening on %s (TLS)", cfg.ListenAddr)

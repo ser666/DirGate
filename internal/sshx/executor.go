@@ -31,11 +31,9 @@ type UserSpec struct {
 	Removed     []PermissionSpec // 更新权限时需撤销 ACL 的旧目录
 }
 
-// BuildCreateScript 生成幂等的建户脚本：用户已存在时跳过 useradd，
-// 但始终重新执行 chpasswd 与权限授权，确保重试（如首次建户后 setfacl
-// 失败）能补全密码与目录 ACL，而非静默跳过。
-// 密码不写入脚本：chpasswd 从 stdin 读取 username:password，由 Executor
-// 经加密通道写入，避免出现在远端命令行（ps）中。
+// BuildCreateScript 生成幂等建户脚本。密码不写入脚本：chpasswd 从 stdin 读
+// username:password（由 Executor 经加密通道写入），避免出现在远端命令行（ps）。
+// 用户已存在时跳过 useradd 但重跑 chpasswd 与 ACL，保证重试能补全未完成的步骤。
 func BuildCreateScript(u UserSpec) string {
 	var b strings.Builder
 	b.WriteString("set -e\n")
@@ -57,12 +55,29 @@ func permLines(username string, p PermissionSpec) string {
 		shq(username), shq(p.Path), shq(username), shq(p.Path))
 }
 
-func BuildDeleteScript(username string) string {
+// BuildDeleteScript 生成删户脚本：先逐目录撤销 ACL（避免孤儿权限残留在被授权目录上），
+// 再删除用户。用户不存在时静默成功，保持幂等重试。
+func BuildDeleteScript(username string, revoked []PermissionSpec) string {
 	var b strings.Builder
 	b.WriteString("set -e\n")
 	b.WriteString(sudoProbe)
 	b.WriteString(fmt.Sprintf("id %s >/dev/null 2>&1 || exit 0\n", shq(username)))
+	for _, p := range revoked {
+		b.WriteString(revokeLines(username, p))
+	}
 	b.WriteString(fmt.Sprintf("$SUDO userdel -r %s\n", shq(username)))
+	return b.String()
+}
+
+// BuildLockScript 生成锁定脚本：usermod -L 封密码 + usermod -s /sbin/nologin 封登录 shell，
+// 不删除数据，供账户到期回收；可被「重新建户」逆转（usermod -U + 恢复 bash）。
+func BuildLockScript(username string) string {
+	var b strings.Builder
+	b.WriteString("set -e\n")
+	b.WriteString(sudoProbe)
+	b.WriteString(fmt.Sprintf("id %s >/dev/null 2>&1 || exit 0\n", shq(username)))
+	b.WriteString(fmt.Sprintf("$SUDO usermod -L %s\n", shq(username)))
+	b.WriteString("$SUDO usermod -s /sbin/nologin " + shq(username) + "\n")
 	return b.String()
 }
 
@@ -127,7 +142,7 @@ func (x *Executor) CreateUser(ctx context.Context, host string, port int, rootUs
 	return fp, nil
 }
 
-// DeleteUser 删户并返回 SSH 主机指纹（即使主机指纹此前为空，也应回写以完成 TOFU 固定）。
+// DeleteUser 删户（先撤销逐目录 ACL）并返回 SSH 主机指纹（即使指纹此前为空，也应回写以完成 TOFU 固定）。
 func (x *Executor) DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec UserSpec) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
 	defer cancel()
@@ -136,8 +151,23 @@ func (x *Executor) DeleteUser(ctx context.Context, host string, port int, rootUs
 		return "", err
 	}
 	defer c.Close()
-	if _, err := c.Run(ctx, BuildDeleteScript(spec.Username)); err != nil {
+	if _, err := c.Run(ctx, BuildDeleteScript(spec.Username, spec.Permissions)); err != nil {
 		return "", fmt.Errorf("delete user %s: %w", spec.Username, err)
+	}
+	return fp, nil
+}
+
+// LockUser 锁定 OS 用户（封密码 + nologin），供到期回收，不删数据；「重新建户」可逆转。
+func (x *Executor) LockUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost, username string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
+	defer cancel()
+	c, fp, err := Dial(host, port, rootUser, rootPassword, knownHost)
+	if err != nil {
+		return "", err
+	}
+	defer c.Close()
+	if _, err := c.Run(ctx, BuildLockScript(username)); err != nil {
+		return "", fmt.Errorf("lock user %s: %w", username, err)
 	}
 	return fp, nil
 }
