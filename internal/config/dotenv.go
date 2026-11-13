@@ -5,10 +5,8 @@ import (
 	"strings"
 )
 
-// LoadDotEnv 从 .env 文件读取 KEY=VALUE 并写入环境变量，使项目可「下载即配置」。
-// 路径可用环境变量 SAL_ENV_FILE 覆盖（默认工作目录下的 .env）。
-// 已存在的环境变量不会被覆盖（真实环境变量优先于 .env），保证运维可显式覆盖。
-// 文件不存在时静默返回 nil——「未使用 .env」属正常情况。
+// LoadDotEnv 从 .env 读取 KEY=VALUE 注入环境变量（路径可用 SAL_ENV_FILE 覆盖）。
+// 已存在的环境变量不覆盖（真实环境变量优先）；文件不存在属正常情况，静默返回。
 func LoadDotEnv() error {
 	path := os.Getenv("SAL_ENV_FILE")
 	if path == "" {
@@ -24,8 +22,8 @@ func LoadDotEnv() error {
 	return parseDotEnv(string(b))
 }
 
-// parseDotEnv 解析 .env 内容：忽略空行与 # 注释，支持可选 `export ` 前缀与
-// 单/双引号包裹的值；不剥离行内 #（密码等值可能含 #）。格式非法行宽松跳过。
+// parseDotEnv 宽松解析：忽略空行/注释行，支持可选 export 前缀与引号包裹；
+// 不剥离行内 #（密码可能含 #），非法行跳过。
 func parseDotEnv(content string) error {
 	for _, raw := range strings.Split(content, "\n") {
 		line := strings.TrimSpace(raw)

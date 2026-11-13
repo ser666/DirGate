@@ -29,7 +29,7 @@
     {{if .Accounts}}
     <table class="table">
       <thead>
-        <tr><th>用户名</th><th>状态</th><th>能力</th><th>目录权限</th><th class="right">操作</th></tr>
+        <tr><th>用户名</th><th>状态</th><th>能力</th><th>目录权限</th><th>到期</th><th class="right">操作</th></tr>
       </thead>
       <tbody>
       {{range .Accounts}}
@@ -38,6 +38,7 @@
           <td>
             {{if eq .Status "active"}}<span class="badge badge-active">正常</span>
             {{else if eq .Status "error"}}<span class="badge badge-error">异常</span>{{if .LastError}}<div class="err-hint">{{.LastError}}</div>{{end}}
+            {{else if eq .Status "locked"}}<span class="badge badge-error">已锁定</span>{{if .LastError}}<div class="err-hint">{{.LastError}}</div>{{end}}
             {{else}}<span class="badge badge-pending">待建户</span>{{end}}
           </td>
           <td>
@@ -49,6 +50,25 @@
             <span class="perms">{{range .Permissions}}<span class="perm"><span class="path">{{.Path}}</span>=<span class="m {{.Mode}}">{{.Mode}}</span></span>{{end}}</span>
             {{else}}<span class="mono" style="color:var(--muted)">—</span>{{end}}
           </td>
+          <td>
+            {{if .ExpiresAt}}
+              {{if expired .ExpiresAt}}<span class="badge badge-error">已到期</span>{{end}}
+              <span class="mono" style="font-size:12px">{{.ExpiresAt}}</span>
+            {{else}}<span class="mono" style="color:var(--muted);font-size:12px">永不</span>{{end}}
+            <details class="edit">
+              <summary class="btn btn-sm" title="设置到期时间；到期后自动锁定 OS 账户并停止 MCP 暴露">到期</summary>
+              <div class="panel">
+                <form class="exp-form" data-account="{{.ID}}">
+                  <div class="hint">RFC3339 时刻，如 <span class="mono">2026-12-31T23:59:59+08:00</span>；留空 = 永不到期</div>
+                  <div class="row">
+                    <input name="expires_at" value="{{.ExpiresAt}}" placeholder="2026-12-31T23:59:59+08:00">
+                    <button type="submit" class="btn btn-sm btn-primary">保存</button>
+                  </div>
+                  <span class="msg"></span>
+                </form>
+              </div>
+            </details>
+          </td>
           <td class="right">
             <details class="edit">
               <summary class="btn btn-sm">改权限</summary>
@@ -56,7 +76,7 @@
                 <form class="perm-form" data-account="{{.ID}}">
                   <div class="hint">逐目录授权，逗号分隔：<span class="mono">/data/a=rw,/data/b=ro</span></div>
                   <div class="row">
-                    <input name="perms" value="{{.PermSpec}}" placeholder="/data/a=rw,/data/b=ro">
+                    <input name="perms" value="{{permSpec .Permissions}}" placeholder="/data/a=rw,/data/b=ro">
                     <button type="submit" class="btn btn-sm btn-primary">保存</button>
                   </div>
                   <span class="msg"></span>
@@ -93,6 +113,7 @@
       <label>用户名<input name="username" placeholder="如 coder1" autocomplete="off" required></label>
       <label>密码<input name="password" type="password" autocomplete="new-password" required></label>
       <label>目录权限<span class="hint" style="font-weight:400;color:var(--muted)">逗号分隔 <span class="mono">/data/a=rw,/data/b=ro</span></span><input name="permissions" placeholder="/data/a=rw,/data/b=ro"></label>
+      <label>到期时间<span class="hint" style="font-weight:400;color:var(--muted)">留空 = 永不到期</span><input name="expires_at" placeholder="2026-12-31T23:59:59+08:00"></label>
       <label class="check"><input type="checkbox" name="coding_capable" checked> 编码能力</label>
       <label class="check"><input type="checkbox" name="exposed_to_agent" checked> 暴露给 agent</label>
       <div class="form-actions"><button type="submit" class="btn btn-primary">创建账户</button></div>
@@ -106,6 +127,7 @@ salSubmit('add-account', '/api/servers/{{.Server.ID}}/accounts', function (fd) {
     username: fd.get('username'), password: fd.get('password'),
     coding_capable: fd.get('coding_capable') === 'on',
     exposed_to_agent: fd.get('exposed_to_agent') === 'on',
+    expires_at: (fd.get('expires_at') || '').trim(),
     permissions: parsePerms(fd.get('permissions'))
   };
 });

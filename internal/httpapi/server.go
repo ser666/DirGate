@@ -16,6 +16,7 @@ type userExecutor interface {
 	DeleteUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error)
 	UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error)
 	TestConnection(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string) (string, error)
+	LockUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost, username string) (string, error)
 }
 
 type Server struct {
@@ -31,7 +32,7 @@ type Server struct {
 func New(st *store.Store, key []byte, adminUser string, exec userExecutor, mcpHandler http.Handler, secureCookies bool) *Server {
 	tmpl, err := web.ParseTemplates()
 	if err != nil {
-		panic(err) // 内嵌模板固定有效，Task 13 已测试可解析可执行
+		panic(err) // 内嵌模板随二进制分发，解析失败属构建错误，embed_test 已固化
 	}
 	return &Server{st: st, key: key, adminUser: adminUser, exec: exec, mcpHandler: mcpHandler, secureCookies: secureCookies, templates: tmpl}
 }

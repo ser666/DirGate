@@ -37,9 +37,11 @@ func (s *Store) Close() error { return s.db.Close() }
 func (s *Store) Encrypt(plain []byte) ([]byte, error) { return crypto.Encrypt(s.key, plain) }
 func (s *Store) Decrypt(enc []byte) ([]byte, error)   { return crypto.Decrypt(s.key, enc) }
 
-func (s *Store) migrate() error {
-	const schema = `
-CREATE TABLE IF NOT EXISTS servers (
+// migrations 按序递增的 schema 迁移；PRAGMA user_version 记录已应用步数。
+// 已发布的版本不可修改，只能追加。
+var migrations = []string{
+	// v1: 初始 schema（历史版本的 CREATE TABLE IF NOT EXISTS 等价物）。
+	`CREATE TABLE IF NOT EXISTS servers (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, host TEXT NOT NULL,
   ssh_port INTEGER NOT NULL DEFAULT 22, root_user TEXT NOT NULL DEFAULT 'root',
   root_password_enc BLOB NOT NULL, host_key TEXT NOT NULL DEFAULT '',
@@ -60,9 +62,52 @@ CREATE TABLE IF NOT EXISTS directory_permissions (
 );
 CREATE TABLE IF NOT EXISTS admin (
   id INTEGER PRIMARY KEY CHECK (id = 1), username TEXT NOT NULL, password_hash TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-`
-	_, err := s.db.Exec(schema)
-	return err
+);`,
+	// v2: 账户到期时间（RFC3339，空串 = 永不到期）。
+	`ALTER TABLE accounts ADD COLUMN expires_at TEXT NOT NULL DEFAULT '';`,
+	// v3: 移除从未投入使用的 settings 表（死代码清理）。
+	`DROP TABLE IF EXISTS settings;`,
 }
+
+func (s *Store) migrate() error {
+	var version int
+	if err := s.db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		return err
+	}
+	for i := version; i < len(migrations); i++ {
+		tx, err := s.db.Begin()
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(migrations[i]); err != nil {
+			tx.Rollback()
+			return err
+		}
+		// user_version 不能用参数绑定，i+1 由循环变量构成、无注入面。
+		if _, err := tx.Exec("PRAGMA user_version = " + itoa(i+1)); err != nil {
+			tx.Rollback()
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var b [20]byte
+	i := len(b)
+	for n > 0 {
+		i--
+		b[i] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(b[i:])
+}
+
+// mkdirAll 供测试建旧版数据目录复用。
+func mkdirAll(path string) error { return os.MkdirAll(filepath.Dir(path), 0o700) }

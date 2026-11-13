@@ -24,17 +24,3 @@ func TestAdminUpsertGet(t *testing.T) {
 		t.Fatal("upsert failed")
 	}
 }
-
-func TestSettings(t *testing.T) {
-	s := newTestStore(t)
-	ctx := context.Background()
-	if v, _ := s.GetSetting(ctx, "k"); v != "" {
-		t.Fatal("expected empty")
-	}
-	if err := s.SetSetting(ctx, "k", "v1"); err != nil {
-		t.Fatal(err)
-	}
-	if v, _ := s.GetSetting(ctx, "k"); v != "v1" {
-		t.Fatalf("got %q", v)
-	}
-}

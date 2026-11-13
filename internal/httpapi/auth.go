@@ -57,21 +57,21 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie(sessionCookie)
 		if err != nil {
-			writeErr(w, http.StatusUnauthorized, "unauthorized")
+			writeErr(w, r, http.StatusUnauthorized, "unauthorized", nil)
 			return
 		}
 		payload, ok := s.verifyCookie(c.Value)
 		if !ok {
-			writeErr(w, http.StatusUnauthorized, "unauthorized")
+			writeErr(w, r, http.StatusUnauthorized, "unauthorized", nil)
 			return
 		}
 		var sp sessionPayload
 		if json.Unmarshal([]byte(payload), &sp) != nil || sp.User != s.adminUser || sp.Exp < time.Now().Unix() {
-			writeErr(w, http.StatusUnauthorized, "unauthorized")
+			writeErr(w, r, http.StatusUnauthorized, "unauthorized", nil)
 			return
 		}
 		if isStateChanging(r.Method) && !s.csrfValid(r) {
-			writeErr(w, http.StatusForbidden, "invalid csrf token")
+			writeErr(w, r, http.StatusForbidden, "invalid csrf token", nil)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -151,7 +151,7 @@ func clientIP(r *http.Request) string {
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	ip := clientIP(r)
 	if !reserveLoginAttempt(ip) {
-		writeErr(w, http.StatusTooManyRequests, "too many attempts")
+		writeErr(w, r, http.StatusTooManyRequests, "too many attempts", nil)
 		return
 	}
 	var in struct {
@@ -159,12 +159,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if json.NewDecoder(r.Body).Decode(&in) != nil || in.Username != s.adminUser {
-		writeErr(w, http.StatusUnauthorized, "invalid credentials")
+		writeErr(w, r, http.StatusUnauthorized, "invalid credentials", nil)
 		return
 	}
 	admin, err := s.st.GetAdmin(r.Context())
 	if err != nil || !crypto.VerifyPassword(admin.PasswordHash, in.Password) {
-		writeErr(w, http.StatusUnauthorized, "invalid credentials")
+		writeErr(w, r, http.StatusUnauthorized, "invalid credentials", nil)
 		return
 	}
 	releaseLoginAttempt(ip)

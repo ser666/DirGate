@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -40,9 +41,9 @@ func NewHandler(st *store.Store, key []byte, token string) (http.Handler, error)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_exposed_accounts",
-		Description: "列出所有已暴露给 agent 的编码账户及其 SSH 凭据与目录权限",
+		Description: "列出所有已暴露给 agent 的编码账户及其 SSH 凭据与目录权限（已到期账户自动除外）",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in listAccountsArgs) (*mcp.CallToolResult, listAccountsResult, error) {
-		accounts, err := st.ListExposedAccounts(ctx)
+		accounts, err := st.ListExposedAccounts(ctx, time.Now().UTC().Format(time.RFC3339Nano))
 		if err != nil {
 			return nil, listAccountsResult{}, err
 		}

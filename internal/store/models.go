@@ -4,6 +4,7 @@ const (
 	StatusPending = "pending"
 	StatusActive  = "active"
 	StatusError   = "error"
+	StatusLocked  = "locked" // 到期回收：OS 账户已被锁定，等待管理员删除或续期
 
 	ModeReadWrite = "rw"
 	ModeReadOnly  = "ro"
@@ -32,8 +33,11 @@ type Account struct {
 	ExposedToAgent bool
 	Status         string
 	LastError      string
-	CreatedAt      string
-	UpdatedAt      string
+	// ExpiresAt 为 RFC3339 时刻，空串表示永不到期；到期后账户不再经 MCP 暴露，
+	// 由后台回收器锁定 OS 账户。
+	ExpiresAt string
+	CreatedAt string
+	UpdatedAt string
 }
 
 type DirectoryPermission struct {
