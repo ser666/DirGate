@@ -42,6 +42,23 @@ func TestBuildCreateScriptIdempotent(t *testing.T) {
 	}
 }
 
+// 建户脚本必须逆转到期锁定：usermod -U（解锁密码）+ 恢复 /bin/bash。
+func TestBuildCreateScriptReversesLock(t *testing.T) {
+	script := BuildCreateScript(UserSpec{Username: "alice"})
+	for _, want := range []string{
+		"$SUDO usermod -U 'alice' 2>/dev/null || true",
+		"$SUDO usermod -s /bin/bash 'alice'",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("create script missing lock-reversal %q:\n%s", want, script)
+		}
+	}
+	// 解锁须在 chpasswd 之前（chpasswd 重设密码后不再需要 -U，但顺序上先解锁更稳）。
+	if strings.Index(script, "usermod -U") > strings.Index(script, "chpasswd") {
+		t.Fatalf("usermod -U must precede chpasswd:\n%s", script)
+	}
+}
+
 func TestBuildCreateScriptQuotesPasswordOffCommandLine(t *testing.T) {
 	// 即使密码含单引号等 shell 特殊字符，也不得进入脚本。
 	u := UserSpec{Username: "alice", Password: "p@ss'; rm -rf /tmp/pwn; echo '", Permissions: nil}

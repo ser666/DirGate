@@ -12,8 +12,7 @@ import (
 )
 
 var (
-	errBadExpiry    = errors.New("expires_at must be RFC3339 (e.g. 2026-12-31T23:59:59+08:00) or empty")
-	errExpiredExpiry = errors.New("expires_at must be in the future")
+	errBadExpiry = errors.New("expires_at must be RFC3339 (e.g. 2026-12-31T23:59:59+08:00) or empty")
 )
 
 type accountInput struct {
@@ -232,17 +231,14 @@ func (s *Server) handleUpdateAccount(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toAccountDTO(*a, perms))
 }
 
-// validateExpiresAt 接受空串（永不到期）或 RFC3339 时刻，且必须晚于当前时间。
+// validateExpiresAt 接受空串（永不到期）或 RFC3339 时刻。
+// 允许过去时刻：管理员可能要标记「视同已到期」让账户立即失效。
 func validateExpiresAt(v string) error {
 	if v == "" {
 		return nil
 	}
-	t, err := time.Parse(time.RFC3339, v)
-	if err != nil {
+	if _, err := time.Parse(time.RFC3339, v); err != nil {
 		return errBadExpiry
-	}
-	if !t.After(time.Now()) {
-		return errExpiredExpiry
 	}
 	return nil
 }

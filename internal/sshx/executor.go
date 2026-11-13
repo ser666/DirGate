@@ -34,11 +34,14 @@ type UserSpec struct {
 // BuildCreateScript 生成幂等建户脚本。密码不写入脚本：chpasswd 从 stdin 读
 // username:password（由 Executor 经加密通道写入），避免出现在远端命令行（ps）。
 // 用户已存在时跳过 useradd 但重跑 chpasswd 与 ACL，保证重试能补全未完成的步骤。
+// usermod -U + 恢复 bash：逆转到期锁定的 usermod -L / nologin 状态（用户不存在时跳过）。
 func BuildCreateScript(u UserSpec) string {
 	var b strings.Builder
 	b.WriteString("set -e\n")
 	b.WriteString(sudoProbe)
 	b.WriteString(fmt.Sprintf("id %s >/dev/null 2>&1 || $SUDO useradd -m -s /bin/bash %s\n", shq(u.Username), shq(u.Username)))
+	b.WriteString(fmt.Sprintf("$SUDO usermod -U %s 2>/dev/null || true\n", shq(u.Username)))
+	b.WriteString(fmt.Sprintf("$SUDO usermod -s /bin/bash %s\n", shq(u.Username)))
 	b.WriteString("$SUDO chpasswd\n")
 	for _, p := range u.Permissions {
 		b.WriteString(permLines(u.Username, p))
