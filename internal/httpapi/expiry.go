@@ -4,6 +4,9 @@ import (
 	"context"
 	"log"
 	"time"
+
+	"serveragentlink/internal/sshx"
+	"serveragentlink/internal/store"
 )
 
 // StartExpirySweeper 启动到期回收循环：每 10 分钟扫描一次已到期且未锁定的账户，
@@ -42,12 +45,27 @@ func (s *Server) lockExpired(ctx context.Context, accountID, username, serverID 
 		log.Printf("expiry sweeper: account %s: get server: %v", username, err)
 		return
 	}
-	rootPw, err := s.st.Decrypt(sv.RootPasswordEnc)
+	adminPw, err := s.st.Decrypt(sv.RootPasswordEnc)
 	if err != nil {
 		log.Printf("expiry sweeper: account %s: decrypt: %v", username, err)
 		return
 	}
-	fp, err := s.exec.LockUser(ctx, sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), sv.HostKey, username)
+	perms, err := s.st.ListPermissions(ctx, accountID)
+	if err != nil {
+		log.Printf("expiry sweeper: account %s: list perms: %v", username, err)
+		return
+	}
+	var revoked []sshx.PermissionSpec
+	for _, p := range perms {
+		revoked = append(revoked, sshx.PermissionSpec{Path: p.Path, Mode: p.Mode})
+	}
+	var fp string
+	if sv.AccessMode == store.AccessPlain {
+		// plain：隔离 = 撤销全部授权目录 ACL（含默认 ACL），不触碰 OS 账户。
+		fp, err = s.exec.AttachLock(ctx, sv.Host, sv.SSHPort, sv.RootUser, string(adminPw), sv.HostKey, revoked)
+	} else {
+		fp, err = s.exec.LockUser(ctx, sv.Host, sv.SSHPort, sv.RootUser, string(adminPw), sv.HostKey, username)
+	}
 	if err != nil {
 		// 锁定失败保留 error 状态记录原因，下轮扫描重试（ListExpiringAccounts 会再返回它）。
 		log.Printf("expiry sweeper: lock %s: %v", username, err)

@@ -155,3 +155,39 @@ func TestBuildScriptsAutoSudo(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildAttachPermScript(t *testing.T) {
+	script := BuildAttachPermScript(
+		[]PermissionSpec{{Path: "/home/dev/a", Mode: "rw"}},
+		[]PermissionSpec{{Path: "/home/dev/old", Mode: "ro"}},
+	)
+	// plain 模式无 sudo：setfacl 裸调用（内核限自己拥有的目录），用户取自 $LOGNAME
+	for _, want := range []string{
+		"setfacl -x u:$LOGNAME '/home/dev/old'",
+		"setfacl -x d:u:$LOGNAME '/home/dev/old'",
+		"setfacl -m u:$LOGNAME:rwx '/home/dev/a'",
+		"setfacl -m d:u:$LOGNAME:rwx '/home/dev/a'",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("attach perm script missing %q:\n%s", want, script)
+		}
+	}
+	if strings.Contains(script, "$SUDO") {
+		t.Fatalf("attach script must not use sudo:\n%s", script)
+	}
+	// 撤销先于授予
+	if strings.Index(script, "setfacl -x") > strings.Index(script, "setfacl -m") {
+		t.Fatalf("revoke must precede grant:\n%s", script)
+	}
+}
+
+func TestBuildAttachLockScript(t *testing.T) {
+	script := BuildAttachLockScript([]PermissionSpec{{Path: "/home/dev/a", Mode: "rw"}})
+	// setfacl -b 清全部 ACL（含默认），幂等容忍不存在
+	if !strings.Contains(script, "setfacl -b '/home/dev/a'") {
+		t.Fatalf("lock script missing setfacl -b:\n%s", script)
+	}
+	if strings.Contains(script, "usermod") || strings.Contains(script, "userdel") {
+		t.Fatalf("plain lock must not touch OS account:\n%s", script)
+	}
+}

@@ -35,7 +35,7 @@
         <tr>
           <td><a class="mono" href="/servers/{{.ID}}">{{.Name}}</a></td>
           <td><span class="mono">{{.Host}}:{{.SSHPort}}</span></td>
-          <td id="st-{{.ID}}">{{if .Verified}}<span class="dot dot-ok"></span><span data-i18n="verified">已验证</span>{{else}}<span class="dot dot-dim"></span><span data-i18n="unverified">未验证</span>{{end}}</td>
+          <td id="st-{{.ID}}">{{if .Verified}}<span class="dot dot-ok"></span><span data-i18n="verified">已验证</span>{{if .AccessMode}} · <span class="mono" style="font-size:11px">{{.AccessMode}}</span>{{end}}{{else}}<span class="dot dot-dim"></span><span data-i18n="unverified">未验证</span>{{end}}</td>
           <td><span class="mono">{{.AccountCount}}</span></td>
           <td class="right">
             <a class="btn btn-sm" href="/servers/{{.ID}}" data-i18n="enter">进入</a>

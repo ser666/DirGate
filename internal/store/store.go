@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS admin (
 	`ALTER TABLE accounts ADD COLUMN expires_at TEXT NOT NULL DEFAULT '';`,
 	// v3: 移除从未投入使用的 settings 表（死代码清理）。
 	`DROP TABLE IF EXISTS settings;`,
+	// v4: 服务器管理能力级别（root | sudo | plain；plain = attach-only，无特权账户）。
+	`ALTER TABLE servers ADD COLUMN access_mode TEXT NOT NULL DEFAULT '';`,
 }
 
 func (s *Store) migrate() error {

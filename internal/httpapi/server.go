@@ -17,6 +17,10 @@ type userExecutor interface {
 	UpdatePermissions(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string, spec sshx.UserSpec) (string, error)
 	TestConnection(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string) (string, error)
 	LockUser(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost, username string) (string, error)
+	ProbeMode(ctx context.Context, host string, port int, adminUser, adminPassword, knownHost string) (string, string, error)
+	AttachVerify(ctx context.Context, host string, port int, username, password, knownHost string) (string, error)
+	AttachSetPermissions(ctx context.Context, host string, port int, adminUser, adminPassword, knownHost string, granted, removed []sshx.PermissionSpec) (string, error)
+	AttachLock(ctx context.Context, host string, port int, adminUser, adminPassword, knownHost string, revoked []sshx.PermissionSpec) (string, error)
 }
 
 type Server struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+
 	"net/http"
 	"time"
 
@@ -12,7 +13,8 @@ import (
 )
 
 var (
-	errBadExpiry = errors.New("expires_at must be RFC3339 (e.g. 2026-12-31T23:59:59+08:00) or empty")
+	errBadExpiry             = errors.New("expires_at must be RFC3339 (e.g. 2026-12-31T23:59:59+08:00) or empty")
+	errAttachAccountMismatch = errors.New("plain-mode servers can only attach the admin account itself (username must equal the server's admin user)")
 )
 
 type accountInput struct {
@@ -89,6 +91,11 @@ func (s *Server) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
+	// plain（attach-only）服务器：只允许 attach 管理账户本人，提前拒绝避免留半截记录。
+	if sv, err := s.st.GetServer(r.Context(), serverID); err == nil && sv.AccessMode == store.AccessPlain && in.Username != sv.RootUser {
+		writeErr(w, r, http.StatusBadRequest, errAttachAccountMismatch.Error(), nil)
+		return
+	}
 	a, err := s.st.CreateAccount(r.Context(), serverID, in.Username, in.Password, in.CodingCapable, in.ExposedToAgent)
 	if err != nil {
 		writeErr(w, r, http.StatusInternalServerError, "create failed", err)
@@ -136,15 +143,17 @@ func writeAccount(w http.ResponseWriter, r *http.Request, s *Server, id string, 
 	writeJSON(w, code, toAccountDTO(*a, perms))
 }
 
-// provision 用 root 凭据在服务器上真实建户；失败时标记 status=error。
-// usermod -U + useradd 的 bash shell 会逆转到期锁定的 nologin 状态。
+// provision 在服务器上落地账户：按服务器 access_mode 分流——
+//
+//	root/sudo：真实建户（useradd+chpasswd+ACL），可建新用户；
+//	plain（attach-only）：不建户，验证已存在账户的密码后仅授 ACL（限自己拥有的目录）。
 func (s *Server) provision(r *http.Request, a *store.Account) {
 	sv, err := s.st.GetServer(r.Context(), a.ServerID)
 	if err != nil {
 		s.markError(r, a.ID, err)
 		return
 	}
-	rootPw, err := s.st.Decrypt(sv.RootPasswordEnc)
+	adminPw, err := s.st.Decrypt(sv.RootPasswordEnc)
 	if err != nil {
 		s.markError(r, a.ID, err)
 		return
@@ -163,7 +172,20 @@ func (s *Server) provision(r *http.Request, a *store.Account) {
 	for _, p := range perms {
 		spec.Permissions = append(spec.Permissions, sshx.PermissionSpec{Path: p.Path, Mode: p.Mode})
 	}
-	fp, err := s.exec.CreateUser(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), sv.HostKey, spec)
+	var fp string
+	if sv.AccessMode == store.AccessPlain {
+		// plain（attach-only）：账户必须是管理账户本人，密码须与远端真实账户一致（AttachVerify 即认证）。
+		if a.Username != sv.RootUser {
+			s.markError(r, a.ID, errAttachAccountMismatch)
+			return
+		}
+		fp, err = s.exec.AttachVerify(r.Context(), sv.Host, sv.SSHPort, spec.Username, spec.Password, sv.HostKey)
+		if err == nil && len(spec.Permissions) > 0 {
+			fp, err = s.exec.AttachSetPermissions(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(adminPw), fp, spec.Permissions, nil)
+		}
+	} else { // root / sudo / 未探测：脚本自身探测提权路径
+		fp, err = s.exec.CreateUser(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(adminPw), sv.HostKey, spec)
+	}
 	if err != nil {
 		logRemoteErr(r, "provision "+a.Username, err)
 		s.markError(r, a.ID, err)
@@ -197,8 +219,8 @@ func (s *Server) handleUpdateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		CodingCapable  *bool  `json:"coding_capable"`
-		ExposedToAgent *bool  `json:"exposed_to_agent"`
+		CodingCapable  *bool   `json:"coding_capable"`
+		ExposedToAgent *bool   `json:"exposed_to_agent"`
 		ExpiresAt      *string `json:"expires_at"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -263,13 +285,18 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, http.StatusNotFound, "not found", err)
 		return
 	}
-	rootPw, err := s.st.Decrypt(sv.RootPasswordEnc)
+	adminPw, err := s.st.Decrypt(sv.RootPasswordEnc)
 	if err != nil {
-		writeErr(w, r, http.StatusInternalServerError, "decrypt root password failed", err)
+		writeErr(w, r, http.StatusInternalServerError, "decrypt admin password failed", err)
+		return
+	}
+	// plain 模式无法改 OS 密码（无特权）；attach 账户密码须与服务器真实账户保持一致，改密请直接在服务器上 passwd。
+	if sv.AccessMode == store.AccessPlain {
+		writeErr(w, r, http.StatusBadRequest, "plain-mode: cannot change OS password without privileges; run passwd on the server and update the account here with the same password", nil)
 		return
 	}
 	spec := sshx.UserSpec{Username: a.Username, Password: in.Password}
-	fp, err := s.exec.CreateUser(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), sv.HostKey, spec)
+	fp, err := s.exec.CreateUser(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(adminPw), sv.HostKey, spec)
 	if err != nil {
 		logRemoteErr(r, "change password "+a.Username, err)
 		s.markError(r, a.ID, err)
@@ -301,9 +328,9 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, http.StatusNotFound, "not found", err)
 		return
 	}
-	rootPw, err := s.st.Decrypt(sv.RootPasswordEnc)
+	adminPw, err := s.st.Decrypt(sv.RootPasswordEnc)
 	if err != nil {
-		writeErr(w, r, http.StatusInternalServerError, "decrypt root password failed", err)
+		writeErr(w, r, http.StatusInternalServerError, "decrypt admin password failed", err)
 		return
 	}
 	perms, err := s.st.ListPermissions(r.Context(), a.ID)
@@ -311,12 +338,21 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, http.StatusInternalServerError, "db error", err)
 		return
 	}
-	// 删户脚本先逐目录撤销 ACL 再 userdel，避免孤儿权限。
-	spec := sshx.UserSpec{Username: a.Username, Password: ""}
-	for _, p := range perms {
-		spec.Permissions = append(spec.Permissions, sshx.PermissionSpec{Path: p.Path, Mode: p.Mode})
+	// 删户：先逐目录撤销 ACL 再 userdel（root/sudo）；plain 模式不删 OS 用户，仅撤 ACL 并删记录。
+	var fp string
+	if sv.AccessMode == store.AccessPlain {
+		var revoked []sshx.PermissionSpec
+		for _, p := range perms {
+			revoked = append(revoked, sshx.PermissionSpec{Path: p.Path, Mode: p.Mode})
+		}
+		fp, err = s.exec.AttachLock(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(adminPw), sv.HostKey, revoked)
+	} else {
+		spec := sshx.UserSpec{Username: a.Username}
+		for _, p := range perms {
+			spec.Permissions = append(spec.Permissions, sshx.PermissionSpec{Path: p.Path, Mode: p.Mode})
+		}
+		fp, err = s.exec.DeleteUser(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(adminPw), sv.HostKey, spec)
 	}
-	fp, err := s.exec.DeleteUser(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), sv.HostKey, spec)
 	if err != nil {
 		// 远端删户失败则不删库，保留记录供重试，避免留下无 UI 记录的孤儿账户。
 		logRemoteErr(r, "delete user "+a.Username, err)
@@ -368,41 +404,46 @@ func (s *Server) handleSetPermissions(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, http.StatusInternalServerError, "set perms failed", err)
 		return
 	}
-	// 把新权限真实应用到服务器（含撤销被移除目录的 ACL）；失败则标记账户 error，DB 更新仍保留。
-	if err := s.applyPermissions(r, a, newPerms, oldPerms); err != nil {
+	// 改权限真实应用到服务器（含撤销被移除目录的 ACL）；失败则标记账户 error，DB 更新仍保留。
+	sv, err := s.st.GetServer(r.Context(), a.ServerID)
+	if err != nil {
+		writeErr(w, r, http.StatusNotFound, "not found", err)
+		return
+	}
+	adminPw, err := s.st.Decrypt(sv.RootPasswordEnc)
+	if err != nil {
+		writeErr(w, r, http.StatusInternalServerError, "decrypt admin password failed", err)
+		return
+	}
+	var granted, removedSpec []sshx.PermissionSpec
+	for _, p := range newPerms {
+		granted = append(granted, sshx.PermissionSpec{Path: p.Path, Mode: p.Mode})
+	}
+	for _, old := range oldPerms {
+		if !hasPerm(newPerms, old) {
+			removedSpec = append(removedSpec, sshx.PermissionSpec{Path: old.Path, Mode: old.Mode})
+		}
+	}
+	var fp string
+	if sv.AccessMode == store.AccessPlain {
+		if a.Username != sv.RootUser {
+			writeErr(w, r, http.StatusBadRequest, errAttachAccountMismatch.Error(), nil)
+			return
+		}
+		fp, err = s.exec.AttachSetPermissions(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(adminPw), sv.HostKey, granted, removedSpec)
+	} else {
+		spec := sshx.UserSpec{Username: a.Username, Permissions: granted, Removed: removedSpec}
+		fp, err = s.exec.UpdatePermissions(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(adminPw), sv.HostKey, spec)
+	}
+	if err != nil {
 		logRemoteErr(r, "apply permissions "+a.Username, err)
 		s.markError(r, a.ID, err)
 		writeErr(w, r, http.StatusBadGateway, "apply permissions failed", err)
 		return
 	}
+	s.persistHostKey(r.Context(), sv, fp)
 	s.audit(r, "account.permissions", a.ID+" "+a.Username)
 	writeJSON(w, http.StatusOK, in)
-}
-
-func (s *Server) applyPermissions(r *http.Request, a *store.Account, newPerms, oldPerms []store.DirectoryPermission) error {
-	sv, err := s.st.GetServer(r.Context(), a.ServerID)
-	if err != nil {
-		return err
-	}
-	rootPw, err := s.st.Decrypt(sv.RootPasswordEnc)
-	if err != nil {
-		return err
-	}
-	spec := sshx.UserSpec{Username: a.Username, Password: ""}
-	for _, p := range newPerms {
-		spec.Permissions = append(spec.Permissions, sshx.PermissionSpec{Path: p.Path, Mode: p.Mode})
-	}
-	for _, old := range oldPerms {
-		if !hasPerm(newPerms, old) {
-			spec.Removed = append(spec.Removed, sshx.PermissionSpec{Path: old.Path, Mode: old.Mode})
-		}
-	}
-	fp, err := s.exec.UpdatePermissions(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), sv.HostKey, spec)
-	if err != nil {
-		return err
-	}
-	s.persistHostKey(r.Context(), sv, fp)
-	return nil
 }
 
 func hasPerm(perms []store.DirectoryPermission, p store.DirectoryPermission) bool {

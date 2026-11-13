@@ -19,17 +19,18 @@ type serverInput struct {
 
 // serverDTO 是 server 的对外视图，绝不包含 RootPasswordEnc。
 type serverDTO struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Host     string `json:"host"`
-	SSHPort  int    `json:"ssh_port"`
-	RootUser string `json:"root_user"`
-	Enabled  bool   `json:"enabled"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Host       string `json:"host"`
+	SSHPort    int    `json:"ssh_port"`
+	RootUser   string `json:"root_user"`
+	Enabled    bool   `json:"enabled"`
+	AccessMode string `json:"access_mode"`
 }
 
 func toServerDTO(sv store.Server) serverDTO {
 	return serverDTO{ID: sv.ID, Name: sv.Name, Host: sv.Host, SSHPort: sv.SSHPort,
-		RootUser: sv.RootUser, Enabled: sv.Enabled}
+		RootUser: sv.RootUser, Enabled: sv.Enabled, AccessMode: sv.AccessMode}
 }
 
 func (s *Server) handleListServers(w http.ResponseWriter, r *http.Request) {
@@ -124,8 +125,8 @@ func (s *Server) handleUpdateServer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toServerDTO(*sv))
 }
 
-// handleTestServer 用已存 root 凭据做一次真实 SSH 拨号 + 无害命令，
-// 验证主机可达 / root 密码正确 / 主机指纹匹配，成功后固定指纹并记录验证时间。
+// handleTestServer 用已存凭据做一次真实 SSH 拨号 + 无害命令，验证主机可达/凭据正确/指纹匹配，
+// 并探测管理账户能力级别（root/sudo/plain）。成功后固定指纹、记录验证时间与 access_mode。
 // 连通失败返回 200 + connected:false（这是测试结果，而非服务器内部错误）。
 func (s *Server) handleTestServer(w http.ResponseWriter, r *http.Request) {
 	sv, err := s.st.GetServer(r.Context(), r.PathValue("id"))
@@ -133,12 +134,12 @@ func (s *Server) handleTestServer(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, http.StatusNotFound, "not found", err)
 		return
 	}
-	rootPw, err := s.st.Decrypt(sv.RootPasswordEnc)
+	adminPw, err := s.st.Decrypt(sv.RootPasswordEnc)
 	if err != nil {
-		writeErr(w, r, http.StatusInternalServerError, "decrypt root password failed", err)
+		writeErr(w, r, http.StatusInternalServerError, "decrypt admin password failed", err)
 		return
 	}
-	fp, err := s.exec.TestConnection(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(rootPw), sv.HostKey)
+	mode, fp, err := s.exec.ProbeMode(r.Context(), sv.Host, sv.SSHPort, sv.RootUser, string(adminPw), sv.HostKey)
 	if err != nil {
 		logRemoteErr(r, "server.test "+sv.ID, err)
 		writeJSON(w, http.StatusOK, map[string]any{"connected": false, "error": err.Error()})
@@ -148,7 +149,12 @@ func (s *Server) handleTestServer(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, http.StatusInternalServerError, "persist failed", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"connected": true, "host_key": fp})
+	// access_mode 单列定向更新，不用整行 UpdateServer（避免覆盖 MarkServerVerified 刚写的指纹）。
+	if err := s.st.UpdateServerAccessMode(r.Context(), sv.ID, mode); err != nil {
+		writeErr(w, r, http.StatusInternalServerError, "persist mode failed", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"connected": true, "host_key": fp, "access_mode": mode})
 }
 
 func (s *Server) handleDeleteServer(w http.ResponseWriter, r *http.Request) {

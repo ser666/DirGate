@@ -24,6 +24,16 @@ type PermissionSpec struct {
 	Mode string // "rw" | "ro"
 }
 
+// 管理账户能力分级（由 ProbeMode 探测）：
+//   root  — uid 0，全功能
+//   sudo  — 免密 sudo（NOPASSWD），全功能
+//   plain — 普通账户，attach-only：不建/删 OS 用户，仅对自己拥有的目录授撤 ACL
+const (
+	ModeRoot  = "root"
+	ModeSudo  = "sudo"
+	ModePlain = "plain"
+)
+
 type UserSpec struct {
 	Username    string
 	Password    string
@@ -72,6 +82,46 @@ func BuildDeleteScript(username string, revoked []PermissionSpec) string {
 	return b.String()
 }
 
+// plain 模式（attach-only）脚本：管理账户无特权，setfacl 不带 $SUDO 前缀，
+// 只能对自己拥有的目录授撤 ACL——内核会拒绝其它目录，天然兜底。
+// 用户名固定为管理账户本人（Attach 用），由调用方保证一致。
+
+// BuildAttachPermScript plain 模式的 ACL 授予/撤销脚本（无 sudo）。
+func BuildAttachPermScript(granted, removed []PermissionSpec) string {
+	var b strings.Builder
+	b.WriteString("set -e\n")
+	for _, p := range removed {
+		b.WriteString(plainRevokeLines(p))
+	}
+	for _, p := range granted {
+		b.WriteString(plainPermLines(p))
+	}
+	return b.String()
+}
+
+func plainPermLines(p PermissionSpec) string {
+	if p.Mode == "rw" {
+		return fmt.Sprintf("setfacl -m u:$LOGNAME:rwx %s\nsetfacl -m d:u:$LOGNAME:rwx %s\n", shq(p.Path), shq(p.Path))
+	}
+	return fmt.Sprintf("setfacl -m u:$LOGNAME:rx %s\nsetfacl -m d:u:$LOGNAME:rx %s\n", shq(p.Path), shq(p.Path))
+}
+
+func plainRevokeLines(p PermissionSpec) string {
+	return fmt.Sprintf("setfacl -x u:$LOGNAME %s 2>/dev/null || true\nsetfacl -x d:u:$LOGNAME %s 2>/dev/null || true\n",
+		shq(p.Path), shq(p.Path))
+}
+
+// BuildAttachLockScript plain 模式的到期「锁定」：撤销全部授权目录的 ACL（隔离等效），
+// 不触碰 OS 账户本身。锁定前清掉默认 ACL，防止目录内新建文件继续继承权限。
+func BuildAttachLockScript(revoked []PermissionSpec) string {
+	var b strings.Builder
+	b.WriteString("set -e\n")
+	for _, p := range revoked {
+		b.WriteString(fmt.Sprintf("setfacl -b %s 2>/dev/null || true\n", shq(p.Path)))
+	}
+	return b.String()
+}
+
 // BuildLockScript 生成锁定脚本：usermod -L 封密码 + usermod -s /sbin/nologin 封登录 shell，
 // 不删除数据，供账户到期回收；可被「重新建户」逆转（usermod -U + 恢复 bash）。
 func BuildLockScript(username string) string {
@@ -112,8 +162,8 @@ func shq(s string) string {
 // Executor 为空结构体，方法集即建户/删户/改权限/连通性测试；便于 httpapi 层做接口注入与 fake。
 type Executor struct{}
 
-// TestConnection 拨号并执行一条无害命令，验证主机可达、root 凭据正确、主机指纹匹配，
-// 返回观察到的 SSH 主机指纹（供调用方回写 TOFU 记录）。不创建任何用户。
+// TestConnection 拨号并执行一条无害命令，验证主机可达、凭据正确、主机指纹匹配，
+// 返回观察到的 SSH 主机指纹（供调用方回写 TOFU 记录）与探测出的管理能力级别。不创建任何用户。
 func (x *Executor) TestConnection(ctx context.Context, host string, port int, rootUser, rootPassword, knownHost string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
 	defer cancel()
@@ -126,6 +176,33 @@ func (x *Executor) TestConnection(ctx context.Context, host string, port int, ro
 		return "", fmt.Errorf("test connection: %w", err)
 	}
 	return fp, nil
+}
+
+// probeScript 判定管理账户的能力级别：root（uid 0）/ sudo（免密 sudo 且能实际提权执行）/ plain。
+// sudo 探测用一条真实提权命令（true）而非仅 sudo -n true——部分 sudoers 只授权特定命令，需要实测。
+const probeScript = `if [ "$(id -u)" = "0" ]; then echo root
+elif sudo -n true 2>/dev/null; then echo sudo
+else echo plain
+fi`
+
+// ProbeMode 探测管理账户的能力级别，供 UI 展示与 provision 路径选择。
+func (x *Executor) ProbeMode(ctx context.Context, host string, port int, adminUser, adminPassword, knownHost string) (string, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
+	defer cancel()
+	c, fp, err := Dial(host, port, adminUser, adminPassword, knownHost)
+	if err != nil {
+		return "", "", err
+	}
+	defer c.Close()
+	out, err := c.Run(ctx, probeScript)
+	if err != nil {
+		return "", "", fmt.Errorf("probe mode: %w", err)
+	}
+	mode := strings.TrimSpace(out)
+	if mode != ModeRoot && mode != ModeSudo && mode != ModePlain {
+		return "", "", fmt.Errorf("probe mode: unexpected output %q", out)
+	}
+	return mode, fp, nil
 }
 
 // CreateUser 建户并返回观察到的 SSH 主机指纹（供调用方回写 TOFU 记录）。
@@ -186,6 +263,52 @@ func (x *Executor) UpdatePermissions(ctx context.Context, host string, port int,
 	defer c.Close()
 	if _, err := c.Run(ctx, BuildUpdateScript(spec)); err != nil {
 		return "", fmt.Errorf("update perms %s: %w", spec.Username, err)
+	}
+	return fp, nil
+}
+
+// AttachVerify 验证一个已存在的 OS 账户可用给定密码登录（plain 模式的「建户」=attach：
+// 不创建任何东西，仅认证）。成功返回主机指纹。
+func (x *Executor) AttachVerify(ctx context.Context, host string, port int, username, password, knownHost string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
+	defer cancel()
+	c, fp, err := Dial(host, port, username, password, knownHost)
+	if err != nil {
+		return "", fmt.Errorf("attach verify %s: %w", username, err)
+	}
+	defer c.Close()
+	if _, err := c.Run(ctx, "echo ok"); err != nil {
+		return "", fmt.Errorf("attach verify %s: %w", username, err)
+	}
+	return fp, nil
+}
+
+// AttachSetPermissions plain 模式：以管理账户（=attach 账户）身份对自己拥有的目录授撤 ACL。
+func (x *Executor) AttachSetPermissions(ctx context.Context, host string, port int, adminUser, adminPassword, knownHost string, granted, removed []PermissionSpec) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
+	defer cancel()
+	c, fp, err := Dial(host, port, adminUser, adminPassword, knownHost)
+	if err != nil {
+		return "", err
+	}
+	defer c.Close()
+	if _, err := c.Run(ctx, BuildAttachPermScript(granted, removed)); err != nil {
+		return "", fmt.Errorf("attach set perms: %w", err)
+	}
+	return fp, nil
+}
+
+// AttachLock plain 模式到期回收：撤销全部授权目录 ACL（含默认 ACL），隔离等效于锁定。
+func (x *Executor) AttachLock(ctx context.Context, host string, port int, adminUser, adminPassword, knownHost string, revoked []PermissionSpec) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
+	defer cancel()
+	c, fp, err := Dial(host, port, adminUser, adminPassword, knownHost)
+	if err != nil {
+		return "", err
+	}
+	defer c.Close()
+	if _, err := c.Run(ctx, BuildAttachLockScript(revoked)); err != nil {
+		return "", fmt.Errorf("attach lock: %w", err)
 	}
 	return fp, nil
 }

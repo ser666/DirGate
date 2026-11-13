@@ -8,6 +8,11 @@ const (
 
 	ModeReadWrite = "rw"
 	ModeReadOnly  = "ro"
+
+	// 服务器管理账户能力级别（测试连通时探测写入）。
+	AccessRoot  = "root"
+	AccessSudo  = "sudo"
+	AccessPlain = "plain" // attach-only：无特权账户，不建/删 OS 用户，仅授撤自己目录的 ACL
 )
 
 type Server struct {
@@ -20,8 +25,10 @@ type Server struct {
 	HostKey         string
 	Enabled         bool
 	LastVerifiedAt  string // RFC3339，空串表示未验证
-	CreatedAt       string
-	UpdatedAt       string
+	// AccessMode 管理账户能力级别：root | sudo | plain（attach-only）。空串 = 尚未探测。
+	AccessMode string
+	CreatedAt  string
+	UpdatedAt  string
 }
 
 type Account struct {
