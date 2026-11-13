@@ -50,7 +50,7 @@ window.salSubmit = function (formId, url, toBody, onOk, method) {
     var fd = new FormData(form);
     salFetch(method || 'POST', url, toBody(fd))
       .then(function () { if (onOk) onOk(); else location.reload(); })
-      .catch(function (err) { alert('操作失败：' + err.message); });
+      .catch(function (err) { alert(salT('op_failed') + err.message); });
   });
 };
 
@@ -60,22 +60,22 @@ function salTest(btn) {
   var target = document.getElementById(btn.getAttribute('data-target'));
   var original = btn.textContent;
   btn.disabled = true;
-  btn.textContent = '测试中…';
+  btn.textContent = salT('testing');
   salFetch('POST', '/api/servers/' + id + '/test', {})
     .then(function (res) {
       if (target) {
         if (res.connected) {
-          target.innerHTML = '<span class="dot dot-ok"></span>已连通' +
+          target.innerHTML = '<span class="dot dot-ok"></span>' + salT('conn_ok') +
             (res.host_key ? ' · <span class="mono fp">' + esc(res.host_key) + '</span>' : '');
         } else {
-          target.innerHTML = '<span class="dot dot-bad"></span>连接失败 · <span class="mono err">' + esc(res.error) + '</span>';
+          target.innerHTML = '<span class="dot dot-bad"></span>' + salT('conn_fail') + ' · <span class="mono err">' + esc(res.error) + '</span>';
         }
       }
     })
     .catch(function (err) {
-      if (target) target.innerHTML = '<span class="dot dot-bad"></span>连接失败 · <span class="mono err">' + esc(err.message) + '</span>';
+      if (target) target.innerHTML = '<span class="dot dot-bad"></span>' + salT('conn_fail') + ' · <span class="mono err">' + esc(err.message) + '</span>';
     })
-    .finally(function () { btn.disabled = false; btn.textContent = original; });
+    .finally(function () { btn.disabled = false; btn.textContent = salT('test_conn'); });
 }
 
 // 退出登录。
@@ -101,19 +101,18 @@ document.addEventListener('click', function (ev) {
     body[flag] = !btn.classList.contains('on');
     salFetch('PUT', '/api/accounts/' + id, body)
       .then(function () { location.reload(); })
-      .catch(function (err) { alert('操作失败：' + err.message); });
+      .catch(function (err) { alert(salT('op_failed') + err.message); });
     return;
   }
 
-  var url = '', method = 'POST';
-  if (action === 'delete-server') { url = '/api/servers/' + id; method = 'DELETE'; }
-  else if (action === 'delete-account') { url = '/api/accounts/' + id; method = 'DELETE'; }
+  var url = '', method = 'POST', confirmKey = '';
+  if (action === 'delete-server') { url = '/api/servers/' + id; method = 'DELETE'; confirmKey = 'confirm_del_server'; }
+  else if (action === 'delete-account') { url = '/api/accounts/' + id; method = 'DELETE'; confirmKey = 'confirm_del_account'; }
   else if (action === 'provision') { url = '/api/accounts/' + id + '/provision'; }
 
-  var msg = btn.getAttribute('data-confirm');
-  if (msg && !window.confirm(msg)) return;
+  if (confirmKey && !window.confirm(salT(confirmKey))) return;
   salFetch(method, url).then(function () { location.reload(); })
-    .catch(function (err) { alert('操作失败：' + err.message); });
+    .catch(function (err) { alert(salT('op_failed') + err.message); });
 });
 
 // 行内「改权限」「改密码」与「到期」表单。
@@ -130,10 +129,10 @@ document.addEventListener('submit', function (ev) {
     ev.preventDefault();
     var m2 = f.querySelector('.msg');
     var pw = f.elements['password'].value;
-    if (!pw) { m2.textContent = '请输入新密码'; m2.classList.add('err'); return; }
+    if (!pw) { m2.textContent = salT('enter_new_pwd'); m2.classList.add('err'); return; }
     salFetch('PUT', '/api/accounts/' + f.getAttribute('data-account') + '/password', { password: pw })
-      .then(function () { m2.textContent = '已更新'; m2.classList.remove('err'); f.elements['password'].value = ''; })
-      .catch(function (err) { m2.textContent = '失败：' + err.message; m2.classList.add('err'); });
+      .then(function () { m2.textContent = salT('updated'); m2.classList.remove('err'); f.elements['password'].value = ''; })
+      .catch(function (err) { m2.textContent = salT('fail') + err.message; m2.classList.add('err'); });
   } else if (f.classList.contains('exp-form')) {
     ev.preventDefault();
     var m3 = f.querySelector('.msg');

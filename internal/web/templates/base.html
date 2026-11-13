@@ -1,11 +1,15 @@
 {{define "head"}}<head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ServerAgentLink · 服务器接线台</title>
+  <title>ServerAgentLink</title>
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/app.js"></script>
+  <script src="/static/i18n.js"></script>
 </head>{{end}}
 
 {{define "nav"}}<header class="topbar">
-  <a class="brand" href="/"><span class="brand-mark">▍</span><span>ServerAgentLink</span><span class="brand-sub">服务器接线台</span></a>
-  {{if .Authed}}<form method="post" action="/api/logout" id="logout"><button class="btn btn-ghost" type="submit">退出</button></form>{{end}}
+  <a class="brand" href="/"><span class="brand-mark">▍</span><span>ServerAgentLink</span><span class="brand-sub" data-i18n="brand_sub">服务器接线台</span></a>
+  <div class="right" style="display:flex;gap:8px;align-items:center">
+    <button class="btn btn-ghost" id="lang-toggle" type="button">EN</button>
+    {{if .Authed}}<form method="post" action="/api/logout" id="logout"><button class="btn btn-ghost" type="submit" data-i18n="logout">退出</button></form>{{end}}
+  </div>
 </header>{{end}}

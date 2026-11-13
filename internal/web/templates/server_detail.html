@@ -4,46 +4,46 @@
 <body>
 {{template "nav" .}}
 <main class="shell">
-  <a class="back" href="/">← 返回服务器列表</a>
+  <a class="back" href="/" data-i18n="back">← 返回服务器列表</a>
 
   <div class="page-head">
     <div>
       <h1>{{.Server.Name}} <span class="mono" style="color:var(--muted);font-size:14px">{{.Server.Host}}:{{.Server.SSHPort}}</span></h1>
-      <p class="sub">root 用户 <span class="mono">{{.Server.RootUser}}</span></p>
+      <p class="sub"><span data-i18n="root_user_is">root 用户</span> <span class="mono">{{.Server.RootUser}}</span></p>
     </div>
     <div class="right">
-      <button class="btn" data-action="test-server" data-id="{{.Server.ID}}" data-target="conn-result">测试连通</button>
-      <button class="btn btn-danger" data-action="delete-server" data-id="{{.Server.ID}}" data-confirm="删除该服务器，并远程删除其全部账户？">删除服务器</button>
+      <button class="btn" data-action="test-server" data-id="{{.Server.ID}}" data-target="conn-result" data-i18n="test_conn">测试连通</button>
+      <button class="btn btn-danger" data-action="delete-server" data-id="{{.Server.ID}}" data-i18n="delete">删除服务器</button>
     </div>
   </div>
 
   <section class="card">
-    <h2 class="card-title">连通性</h2>
+    <h2 class="card-title" data-i18n="connectivity">连通性</h2>
     <div id="conn-result" class="conn-result">
-      {{if .Verified}}<span class="dot dot-ok"></span>已验证{{if .Server.HostKey}} · <span class="mono fp">{{.Server.HostKey}}</span>{{end}}{{else}}<span class="dot dot-dim"></span>尚未验证，点击「测试连通」以验证主机可达与 root 凭据{{end}}
+      {{if .Verified}}<span class="dot dot-ok"></span><span data-i18n="verified">已验证</span>{{if .Server.HostKey}} · <span class="mono fp">{{.Server.HostKey}}</span>{{end}}{{else}}<span class="dot dot-dim"></span><span data-i18n="not_verified_yet">尚未验证，点击「测试连通」以验证主机可达与 root 凭据</span>{{end}}
     </div>
   </section>
 
   <section class="card">
-    <h2 class="card-title">账户 <span class="count">{{len .Accounts}}</span></h2>
+    <h2 class="card-title"><span data-i18n="account_list">账户</span> <span class="count">{{len .Accounts}}</span></h2>
     {{if .Accounts}}
     <table class="table">
       <thead>
-        <tr><th>用户名</th><th>状态</th><th>能力</th><th>目录权限</th><th>到期</th><th class="right">操作</th></tr>
+        <tr><th data-i18n="username_col">用户名</th><th data-i18n="state">状态</th><th data-i18n="capabilities">能力</th><th data-i18n="dir_perms">目录权限</th><th data-i18n="expires_col">到期</th><th class="right" data-i18n="actions">操作</th></tr>
       </thead>
       <tbody>
       {{range .Accounts}}
         <tr>
           <td><span class="mono" style="font-weight:700">{{.Username}}</span></td>
           <td>
-            {{if eq .Status "active"}}<span class="badge badge-active">正常</span>
-            {{else if eq .Status "error"}}<span class="badge badge-error">异常</span>{{if .LastError}}<div class="err-hint">{{.LastError}}</div>{{end}}
-            {{else if eq .Status "locked"}}<span class="badge badge-error">已锁定</span>{{if .LastError}}<div class="err-hint">{{.LastError}}</div>{{end}}
-            {{else}}<span class="badge badge-pending">待建户</span>{{end}}
+            {{if eq .Status "active"}}<span class="badge badge-active" data-i18n="st_active">正常</span>
+            {{else if eq .Status "error"}}<span class="badge badge-error" data-i18n="st_error">异常</span>{{if .LastError}}<div class="err-hint">{{.LastError}}</div>{{end}}
+            {{else if eq .Status "locked"}}<span class="badge badge-error" data-i18n="st_locked">已锁定</span>{{if .LastError}}<div class="err-hint">{{.LastError}}</div>{{end}}
+            {{else}}<span class="badge badge-pending" data-i18n="st_pending">待建户</span>{{end}}
           </td>
           <td>
-            <button class="flag {{if .CodingCapable}}on{{end}}" data-action="toggle-flag" data-id="{{.ID}}" data-flag="coding_capable" title="点击切换「编码能力」">编码</button>
-            <button class="flag {{if .ExposedToAgent}}on{{end}}" data-action="toggle-flag" data-id="{{.ID}}" data-flag="exposed_to_agent" title="点击切换「暴露给 agent」">暴露</button>
+            <button class="flag {{if .CodingCapable}}on{{end}}" data-action="toggle-flag" data-id="{{.ID}}" data-flag="coding_capable" data-i18n="coding" data-i18n-title="coding">编码</button>
+            <button class="flag {{if .ExposedToAgent}}on{{end}}" data-action="toggle-flag" data-id="{{.ID}}" data-flag="exposed_to_agent" data-i18n="exposed" data-i18n-title="exposed_to_agent">暴露</button>
           </td>
           <td>
             {{if .Permissions}}
@@ -52,17 +52,17 @@
           </td>
           <td>
             {{if .ExpiresAt}}
-              {{if expired .ExpiresAt}}<span class="badge badge-error">已到期</span>{{end}}
+              {{if expired .ExpiresAt}}<span class="badge badge-error" data-i18n="expired_badge">已到期</span>{{end}}
               <span class="mono" style="font-size:12px">{{.ExpiresAt}}</span>
-            {{else}}<span class="mono" style="color:var(--muted);font-size:12px">永不</span>{{end}}
+            {{else}}<span class="mono" style="color:var(--muted);font-size:12px" data-i18n="never">永不</span>{{end}}
             <details class="edit">
-              <summary class="btn btn-sm" title="设置到期时间；到期后自动锁定 OS 账户并停止 MCP 暴露">到期</summary>
+              <summary class="btn btn-sm" data-i18n="set_expiry" data-i18n-title="expiry_hint">到期</summary>
               <div class="panel">
                 <form class="exp-form" data-account="{{.ID}}">
-                  <div class="hint">RFC3339 时刻，如 <span class="mono">2026-12-31T23:59:59+08:00</span>；留空 = 永不到期</div>
+                  <div class="hint" data-i18n="expiry_hint">RFC3339 时刻，如 2026-12-31T23:59:59+08:00；留空 = 永不到期</div>
                   <div class="row">
                     <input name="expires_at" value="{{.ExpiresAt}}" placeholder="2026-12-31T23:59:59+08:00">
-                    <button type="submit" class="btn btn-sm btn-primary">保存</button>
+                    <button type="submit" class="btn btn-sm btn-primary" data-i18n="save">保存</button>
                   </div>
                   <span class="msg"></span>
                 </form>
@@ -71,54 +71,54 @@
           </td>
           <td class="right">
             <details class="edit">
-              <summary class="btn btn-sm">改权限</summary>
+              <summary class="btn btn-sm" data-i18n="edit_perms">改权限</summary>
               <div class="panel">
                 <form class="perm-form" data-account="{{.ID}}">
-                  <div class="hint">逐目录授权，逗号分隔：<span class="mono">/data/a=rw,/data/b=ro</span></div>
+                  <div class="hint"><span data-i18n="perms_hint">逐目录授权，逗号分隔：</span><span class="mono">/data/a=rw,/data/b=ro</span></div>
                   <div class="row">
                     <input name="perms" value="{{permSpec .Permissions}}" placeholder="/data/a=rw,/data/b=ro">
-                    <button type="submit" class="btn btn-sm btn-primary">保存</button>
+                    <button type="submit" class="btn btn-sm btn-primary" data-i18n="save">保存</button>
                   </div>
                   <span class="msg"></span>
                 </form>
               </div>
             </details>
             <details class="edit">
-              <summary class="btn btn-sm">改密码</summary>
+              <summary class="btn btn-sm" data-i18n="change_pwd">改密码</summary>
               <div class="panel">
                 <form class="pwd-form" data-account="{{.ID}}">
                   <div class="row">
-                    <input name="password" type="password" placeholder="新密码" autocomplete="new-password">
-                    <button type="submit" class="btn btn-sm btn-primary">重置</button>
+                    <input name="password" type="password" placeholder="新密码" autocomplete="new-password" data-i18n-placeholder="new_password">
+                    <button type="submit" class="btn btn-sm btn-primary" data-i18n="reset">重置</button>
                   </div>
                   <span class="msg"></span>
                 </form>
               </div>
             </details>
-            <button class="btn btn-sm" data-action="provision" data-id="{{.ID}}">重新建户</button>
-            <button class="btn btn-sm btn-danger" data-action="delete-account" data-id="{{.ID}}" data-confirm="删除账户 {{.Username}}，并远程删除该 OS 用户？">删除</button>
+            <button class="btn btn-sm" data-action="provision" data-id="{{.ID}}" data-i18n="re_provision">重新建户</button>
+            <button class="btn btn-sm btn-danger" data-action="delete-account" data-id="{{.ID}}" data-i18n="delete">删除</button>
           </td>
         </tr>
       {{end}}
       </tbody>
     </table>
     {{else}}
-    <p class="empty">还没有账户。在下方为这台服务器创建第一个编码账户。</p>
+    <p class="empty" data-i18n="no_exposed">还没有账户。在下方为这台服务器创建第一个编码账户。</p>
     {{end}}
   </section>
 
   <section class="card">
-    <h2 class="card-title">新建账户</h2>
+    <h2 class="card-title" data-i18n="create_account">新建账户</h2>
     <form id="add-account" class="form grid">
-      <label>用户名<input name="username" placeholder="如 coder1" autocomplete="off" required></label>
-      <label>密码<input name="password" type="password" autocomplete="new-password" required></label>
-      <label>目录权限<span class="hint" style="font-weight:400;color:var(--muted)">逗号分隔 <span class="mono">/data/a=rw,/data/b=ro</span></span><input name="permissions" placeholder="/data/a=rw,/data/b=ro"></label>
-      <label>到期时间<span class="hint" style="font-weight:400;color:var(--muted)">留空 = 永不到期</span><input name="expires_at" placeholder="2026-12-31T23:59:59+08:00"></label>
-      <label class="check"><input type="checkbox" name="coding_capable" checked> 编码能力</label>
-      <label class="check"><input type="checkbox" name="exposed_to_agent" checked> 暴露给 agent</label>
-      <div class="form-actions"><button type="submit" class="btn btn-primary">创建账户</button></div>
+      <label><span data-i18n="username_col">用户名</span><input name="username" placeholder="coder1" autocomplete="off" required></label>
+      <label><span data-i18n="password">密码</span><input name="password" type="password" autocomplete="new-password" required></label>
+      <label><span data-i18n="perms_label">目录权限</span><span class="hint" style="font-weight:400;color:var(--muted)"><span class="mono">/data/a=rw,/data/b=ro</span></span><input name="permissions" placeholder="/data/a=rw,/data/b=ro"></label>
+      <label><span data-i18n="expiry_label">到期时间</span><span class="hint" style="font-weight:400;color:var(--muted)" data-i18n="never_hint">留空 = 永不到期</span><input name="expires_at" placeholder="2026-12-31T23:59:59+08:00"></label>
+      <label class="check"><input type="checkbox" name="coding_capable" checked> <span data-i18n="coding_capable">编码能力</span></label>
+      <label class="check"><input type="checkbox" name="exposed_to_agent" checked> <span data-i18n="exposed_to_agent">暴露给 agent</span></label>
+      <div class="form-actions"><button type="submit" class="btn btn-primary" data-i18n="create">创建账户</button></div>
     </form>
-    <p class="hint" style="margin:10px 0 0;font-size:12px;color:var(--muted)">若用户名在服务器上已存在，将重置其密码并应用上方权限（幂等）。</p>
+    <p class="hint" style="margin:10px 0 0;font-size:12px;color:var(--muted)" data-i18n="idempotent_hint">若用户名在服务器上已存在，将重置其密码并应用上方权限（幂等）。</p>
   </section>
 </main>
 <script>

@@ -6,58 +6,58 @@
 <main class="shell">
   <div class="page-head">
     <div>
-      <h1>服务器</h1>
-      <p class="sub">管理目标服务器，及其编码账户与逐目录权限</p>
+      <h1 data-i18n="servers">服务器</h1>
+      <p class="sub" data-i18n="servers_sub">管理目标服务器，及其编码账户与逐目录权限</p>
     </div>
   </div>
 
   <section class="card">
-    <h2 class="card-title">添加服务器</h2>
+    <h2 class="card-title" data-i18n="add_server">添加服务器</h2>
     <form id="add-server" class="form grid">
-      <label>名称<input name="name" placeholder="如 dev1" required></label>
-      <label>主机<input name="host" placeholder="IP 或域名" required></label>
-      <label>SSH 端口<input name="ssh_port" type="number" value="22" placeholder="22"></label>
-      <label>root 用户<input name="root_user" value="root" placeholder="root"></label>
-      <label>root 密码<input name="root_password" type="password" required></label>
-      <div class="form-actions"><button type="submit" class="btn btn-primary">添加服务器</button></div>
+      <label><span data-i18n="name">名称</span><input name="name" placeholder="dev1" required></label>
+      <label><span data-i18n="host">主机</span><input name="host" placeholder="IP / hostname" required></label>
+      <label><span data-i18n="ssh_port">SSH 端口</span><input name="ssh_port" type="number" value="22" placeholder="22"></label>
+      <label><span data-i18n="root_user">root 用户</span><input name="root_user" value="root" placeholder="root"></label>
+      <label><span data-i18n="root_password">root 密码</span><input name="root_password" type="password" required></label>
+      <div class="form-actions"><button type="submit" class="btn btn-primary" data-i18n="add_server">添加服务器</button></div>
     </form>
   </section>
 
   <section class="card">
-    <h2 class="card-title">服务器列表 <span class="count">{{len .Servers}}</span></h2>
+    <h2 class="card-title"><span data-i18n="server_list">服务器列表</span> <span class="count">{{len .Servers}}</span></h2>
     {{if .Servers}}
     <table class="table">
       <thead>
-        <tr><th>名称</th><th>主机</th><th>状态</th><th>账户</th><th class="right">操作</th></tr>
+        <tr><th data-i18n="name">名称</th><th data-i18n="host">主机</th><th data-i18n="status">状态</th><th data-i18n="accounts">账户</th><th class="right" data-i18n="actions">操作</th></tr>
       </thead>
       <tbody>
       {{range .Servers}}
         <tr>
           <td><a class="mono" href="/servers/{{.ID}}">{{.Name}}</a></td>
           <td><span class="mono">{{.Host}}:{{.SSHPort}}</span></td>
-          <td id="st-{{.ID}}">{{if .Verified}}<span class="dot dot-ok"></span>已验证{{else}}<span class="dot dot-dim"></span>未验证{{end}}</td>
+          <td id="st-{{.ID}}">{{if .Verified}}<span class="dot dot-ok"></span><span data-i18n="verified">已验证</span>{{else}}<span class="dot dot-dim"></span><span data-i18n="unverified">未验证</span>{{end}}</td>
           <td><span class="mono">{{.AccountCount}}</span></td>
           <td class="right">
-            <a class="btn btn-sm" href="/servers/{{.ID}}">进入</a>
-            <button class="btn btn-sm" data-action="test-server" data-id="{{.ID}}" data-target="st-{{.ID}}">测试连通</button>
-            <button class="btn btn-sm btn-danger" data-action="delete-server" data-id="{{.ID}}" data-confirm="删除该服务器，并远程删除其全部账户？">删除</button>
+            <a class="btn btn-sm" href="/servers/{{.ID}}" data-i18n="enter">进入</a>
+            <button class="btn btn-sm" data-action="test-server" data-id="{{.ID}}" data-target="st-{{.ID}}" data-i18n="test_conn">测试连通</button>
+            <button class="btn btn-sm btn-danger" data-action="delete-server" data-id="{{.ID}}" data-i18n="delete">删除</button>
           </td>
         </tr>
       {{end}}
       </tbody>
     </table>
     {{else}}
-    <p class="empty">还没有服务器。在上方添加第一台目标服务器。</p>
+    <p class="empty" data-i18n="no_servers">还没有服务器。在上方添加第一台目标服务器。</p>
     {{end}}
   </section>
 
   <section class="card">
-    <h2 class="card-title">已暴露给 agent 的账户 <span class="count">{{len .Exposed}}</span></h2>
-    <p class="sub" style="margin:0 0 10px">这些账户的 SSH 凭据会通过 MCP 提供给 agent；在服务器详情页点账户行的「暴露」即可开关。</p>
+    <h2 class="card-title"><span data-i18n="exposed_accounts">已暴露给 agent 的账户</span> <span class="count">{{len .Exposed}}</span></h2>
+    <p class="sub" style="margin:0 0 10px" data-i18n="exposed_sub">这些账户的 SSH 凭据会通过 MCP 提供给 agent；在服务器详情页点账户行的「暴露」即可开关。</p>
     {{if .Exposed}}
     <table class="table">
       <thead>
-        <tr><th>服务器</th><th>主机</th><th>账户</th><th>编码</th><th>目录权限</th></tr>
+        <tr><th data-i18n="server">服务器</th><th data-i18n="host">主机</th><th data-i18n="username_col">用户名</th><th data-i18n="coding">编码</th><th data-i18n="dir_perms">目录权限</th></tr>
       </thead>
       <tbody>
       {{range .Exposed}}
@@ -65,14 +65,14 @@
           <td><a class="mono" href="/servers/{{.ServerID}}">{{.ServerName}}</a></td>
           <td><span class="mono">{{.Host}}:{{.SSHPort}}</span></td>
           <td><span class="mono" style="font-weight:700">{{.Username}}</span></td>
-          <td>{{if .CodingCapable}}<span class="flag on">编码</span>{{else}}<span class="flag">—</span>{{end}}</td>
+          <td>{{if .CodingCapable}}<span class="flag on" data-i18n="coding">编码</span>{{else}}<span class="flag">—</span>{{end}}</td>
           <td>{{if .Directories}}<span class="mono">{{permSpec .Directories}}</span>{{else}}<span class="mono" style="color:var(--muted)">—</span>{{end}}</td>
         </tr>
       {{end}}
       </tbody>
     </table>
     {{else}}
-    <p class="empty">暂无暴露给 agent 的账户。进入某台服务器，点账户行的「暴露」开关即可。</p>
+    <p class="empty" data-i18n="no_exposed">暂无暴露给 agent 的账户。进入某台服务器，点账户行的「暴露」开关即可。</p>
     {{end}}
   </section>
 </main>
