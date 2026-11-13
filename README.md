@@ -1,30 +1,34 @@
 # ServerAgentLink
 
-**单个静态二进制。零外部依赖。拷贝即跑。**把你的服务器舰队变成 agent 可发现、逐目录授权、凭据加密的 MCP 凭据目录。
+**单个静态二进制。零外部依赖。拷贝即跑。**把多台服务器的目录安全地暴露给本地 agent：OS 账户供给 + 逐目录 ACL 授权 + MCP 凭据目录，让 agent 在多服务器环境下安全干活。
 
-ServerAgentLink 连接「服务器上部署的 Claude Code」与「云桌面宿主机上的个人助理 agent」：
+一个本地助理 agent 往往要同时在多台服务器上工作（读写代码仓、查日志、改配置）。ServerAgentLink 解决的是这件事的**权限底座**：
 
-- **给人用**（Web UI）：管理服务器、真实创建/删除 OS 用户、逐目录 ACL 授权、编码/暴露开关、到期自动回收。
-- **给 agent 用**（MCP）：一个只读工具 `list_exposed_accounts`，agent 5 分钟内拿到全部被暴露账户的 SSH 凭据与目录权限，自行 SSH 驱动 Claude Code。
+- **给人用**（Web UI）：登记服务器 → 在服务器上真实创建 OS 账户 → 按目录授予只读/读写 ACL → 决定哪些账户暴露给 agent、何时到期回收。
+- **给 agent 用**（MCP）：一个只读工具 `list_exposed_accounts`，agent 一次调用拿到全部被授权的「服务器 + 账户 + 目录清单」，随后在**且仅在**授权目录内工作——越界访问在 OS 层就被拒绝。
+
+核心思路是**授权即边界**：agent 不是拿着 root 密码四处跑，而是拿到一批最小权限的 OS 账户；服务器上真正的访问控制由 POSIX ACL 执行，平台只负责供给与回收。
 
 它**不做**任务代理（不编排 agent），也**不管理** Anthropic API Key——与 orca 之类编排 ADE 正交：agent 先经这里取得凭据授权，才谈得上被谁编排。
 
 ## Agent 5 分钟接入
 
 ```bash
-# 1) 拿账户（一次性，缓存到 agent 上下文）
+# 1) 拿账户（一次性，缓存到 agent 上下文）：每台服务器有哪些账户、哪些目录可读写
 curl -s -H "Authorization: Bearer $SAL_MCP_TOKEN" \
      -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
      -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_exposed_accounts","arguments":{}}}' \
      http://sal-host:8080/mcp
 
-# 2) 用返回的凭据 SSH 驱动 Claude Code
+# 2) 在授权目录内工作（任意 agent 工作流：编码、查日志、改配置……）
 sshpass -p '<password>' ssh -o StrictHostKeyChecking=accept-new \
   coder1@10.0.0.5 -p 22 \
-  'cd /data/repo && claude -p "实现 <任务>" --dangerously-skip-permissions'
+  'cd /data/repo && <任意命令>'
 ```
 
 或在任何支持 MCP 的 agent 里挂 streamable HTTP 端点 `http://sal-host:8080/mcp`，Header 带 `Authorization: Bearer <SAL_MCP_TOKEN>`。
+
+以驱动 Claude Code 为例：agent 拿到凭据后 `ssh` 到目标服务器，在授权目录里执行 `claude -p "任务" --dangerously-skip-permissions`——Claude Code 只是授权目录里的一种用法，平台本身不关心 agent 在目录里跑什么。
 
 管理员的操作全部在 Web UI 完成：添加服务器（root 账号/密码）→ 建账户（真实 OS 用户 + 逐目录 ACL）→ 打开「暴露」开关。agent 侧无需任何配置。
 
@@ -37,9 +41,9 @@ sshpass -p '<password>' ssh -o StrictHostKeyChecking=accept-new \
 └─────────────┘        │  Web UI（内嵌模板） ──► REST API          │
                        │        │                  │               │
 ┌─────────────┐        │        ▼                  ▼               │
-│  agent       │  MCP   │  MCP 服务(streamable HTTP, Bearer)       │
+│  本地 agent   │  MCP   │  MCP 服务(streamable HTTP, Bearer)       │
 │ (coclaw/     ├───────►│   list_exposed_accounts（只读）           │
-│  hermes)     │        │        │                                  │
+│  hermes/任意) │        │        │                                  │
 └─────────────┘        │        ▼                                  │
                        │  SSH 执行器（root 凭据：useradd/chpasswd/  │
                        │  setfacl/usermod）                        │
@@ -50,10 +54,10 @@ sshpass -p '<password>' ssh -o StrictHostKeyChecking=accept-new \
                        │  到期回收器（10 分钟扫描：锁定到期 OS 账户）│
                        └───────────────┬──────────────────────────┘
                                        │ SSH (root)
-                             ┌─────────▼──────────┐
-                             │  目标服务器          │
-                             │  (Claude Code + 目录)│
-                             └────────────────────┘
+                       ┌───────────────┴──────────────┐
+                       │  服务器 A        服务器 B …    │
+                       │  (OS 账户 + 逐目录 ACL)        │
+                       └──────────────────────────────┘
 ```
 
 - **Web UI / REST API**：添加服务器并「测试连通」验证主机/凭据/指纹，建/删账户，逐目录配/改权限（含删户时撤销 ACL），改密码，点选「编码/暴露」开关，设置账户到期时间；首页汇总展示当前暴露给 agent 的账户（到期账户自动消失）。
@@ -61,6 +65,15 @@ sshpass -p '<password>' ssh -o StrictHostKeyChecking=accept-new \
 - **SSH 执行器**：用 root 凭据在服务器上真实执行 `useradd`、`chpasswd`、`setfacl`、`userdel`、`usermod -L`（到期锁定）；非 root 的 sudo 账户自动 `sudo -n` 提权。
 - **到期回收**：每 10 分钟扫描，到期账户先停止 MCP 暴露，再锁定远端 OS 账户（封密码 + nologin，不删数据；管理员可在 UI 删除或续期后「重新建户」恢复）。
 - **SQLite 存储**：账户密码用 AES-256-GCM 加密落库；管理员密码用 argon2id 哈希；`PRAGMA user_version` 版化迁移，升级不炸库。
+
+## 安全模型
+
+agent 在服务器上的实际权限边界由四层共同构成：
+
+1. **OS 账户隔离**：每个被暴露账户是独立 OS 用户，不与 root 或他人共享凭据；进程级隔离（home、umask、shell）天然存在。
+2. **逐目录 ACL**：`setfacl` 精确到目录的 `rw`/`ro` 授权（含默认 ACL，新文件自动继承）；白名单之外的一切路径按服务器原有权限语义拒绝。
+3. **平台侧开关**：`exposed_to_agent` 决定凭据是否出现在 MCP 目录；到期（`expires_at`）决定暴露何时自动终止——MCP 立即消失，远端账户随后锁定。
+4. **平台自身安全**：凭据 AES-256-GCM 加密落库、MCP 静态 Bearer、管理员 argon2id + HMAC 会话 + CSRF + 登录限流、SSH TOFU 指纹、操作审计日志。
 
 ## 环境变量
 
