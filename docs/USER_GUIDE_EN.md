@@ -1,6 +1,8 @@
 # ServerAgentLink User Guide
 
-> Complete operations manual for administrators. For a quick overview see the [README](../README.md). 中文版：[使用说明](使用说明.md)。
+> Complete operations manual for administrators. For a quick overview see the [README](../README.md).
+
+[English](../README.md) · English Guide · [中文说明](../README_ZH.md) · [中文指南](使用说明.md)
 
 ServerAgentLink securely exposes **directories across multiple servers to your local agents**: register servers on the platform, provision (or attach) real OS accounts, grant per-directory read-only / read-write ACLs, and serve the exposed credentials to any MCP-capable personal agent (coclaw, hermes, etc.). Agents then work **only inside** granted directories — coding, inspecting logs, editing configs — while anything beyond the boundary is rejected at the OS level.
 
