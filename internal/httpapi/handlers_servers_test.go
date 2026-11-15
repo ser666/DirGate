@@ -113,8 +113,8 @@ func TestDeleteServerCleansUpRemoteUsers(t *testing.T) {
 	h := srv.Handler()
 
 	sv, _ := srv.st.CreateServer(context.Background(), "dev1", "10.0.0.5", 22, "root", "rootpw")
-	_, _ = srv.st.CreateAccount(context.Background(), sv.ID, "alice", "pw", true, true)
-	_, _ = srv.st.CreateAccount(context.Background(), sv.ID, "bob", "pw", false, false)
+	_, _ = srv.st.CreateAccount(context.Background(), sv.ID, "alice", "pw", true)
+	_, _ = srv.st.CreateAccount(context.Background(), sv.ID, "bob", "pw", false)
 
 	req := authedRequest(t, srv, h, "DELETE", "/api/servers/"+sv.ID, nil)
 	rec := httptest.NewRecorder()
@@ -133,7 +133,7 @@ func TestDeleteServerRemoteFailureKeepsRecord(t *testing.T) {
 	h := srv.Handler()
 
 	sv, _ := srv.st.CreateServer(context.Background(), "dev1", "10.0.0.5", 22, "root", "rootpw")
-	_, _ = srv.st.CreateAccount(context.Background(), sv.ID, "alice", "pw", true, true)
+	_, _ = srv.st.CreateAccount(context.Background(), sv.ID, "alice", "pw", true)
 
 	req := authedRequest(t, srv, h, "DELETE", "/api/servers/"+sv.ID, nil)
 	rec := httptest.NewRecorder()
@@ -151,7 +151,7 @@ func TestServerDetailPageRendersAccountsAndPerms(t *testing.T) {
 	h := srv.Handler()
 
 	sv, _ := srv.st.CreateServer(context.Background(), "dev1", "10.0.0.5", 22, "root", "rootpw")
-	a, _ := srv.st.CreateAccount(context.Background(), sv.ID, "alice", "pw", true, true)
+	a, _ := srv.st.CreateAccount(context.Background(), sv.ID, "alice", "pw", true)
 	_ = srv.st.SetPermissions(context.Background(), a.ID, []store.DirectoryPermission{{Path: "/data/repo", Mode: store.ModeReadWrite}})
 
 	session := login(t, srv, h)
@@ -175,10 +175,10 @@ func TestServersPageListsExposedAccounts(t *testing.T) {
 	h := srv.Handler()
 
 	sv, _ := srv.st.CreateServer(context.Background(), "dev1", "10.0.0.5", 22, "root", "rootpw")
-	a, _ := srv.st.CreateAccount(context.Background(), sv.ID, "coder1", "pw", true, true)
+	a, _ := srv.st.CreateAccount(context.Background(), sv.ID, "coder1", "pw", true)
 	_ = srv.st.SetPermissions(context.Background(), a.ID, []store.DirectoryPermission{{Path: "/data/repo", Mode: store.ModeReadWrite}})
 	// 未暴露的账户不应出现在首页概览里。
-	_, _ = srv.st.CreateAccount(context.Background(), sv.ID, "hidden", "pw", false, false)
+	_, _ = srv.st.CreateAccount(context.Background(), sv.ID, "hidden", "pw", false)
 
 	session := login(t, srv, h)
 	req := httptest.NewRequest("GET", "/", nil)

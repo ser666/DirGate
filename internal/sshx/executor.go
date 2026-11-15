@@ -25,9 +25,10 @@ type PermissionSpec struct {
 }
 
 // 管理账户能力分级（由 ProbeMode 探测）：
-//   root  — uid 0，全功能
-//   sudo  — 免密 sudo（NOPASSWD），全功能
-//   plain — 普通账户，attach-only：不建/删 OS 用户，仅对自己拥有的目录授撤 ACL
+//
+//	root  — uid 0，全功能
+//	sudo  — 免密 sudo（NOPASSWD），全功能
+//	plain — 普通账户，attach-only：不建/删 OS 用户，仅对自己拥有的目录授撤 ACL
 const (
 	ModeRoot  = "root"
 	ModeSudo  = "sudo"
@@ -111,13 +112,15 @@ func plainRevokeLines(p PermissionSpec) string {
 		shq(p.Path), shq(p.Path))
 }
 
-// BuildAttachLockScript plain 模式的到期「锁定」：撤销全部授权目录的 ACL（隔离等效），
-// 不触碰 OS 账户本身。锁定前清掉默认 ACL，防止目录内新建文件继续继承权限。
+// BuildAttachLockScript plain 模式的到期「锁定」：撤销本账户在全部授权目录上的
+// ACL 条目（含默认 ACL 条目），不触碰 OS 账户本身。
+// 不用 setfacl -b——它会清掉目录上所有人的 ACL，误伤同目录的其他授权账户；
+// 撤自身条目（-x u:$LOGNAME / -x d:u:$LOGNAME）即达到隔离目的且无副作用。
 func BuildAttachLockScript(revoked []PermissionSpec) string {
 	var b strings.Builder
 	b.WriteString("set -e\n")
 	for _, p := range revoked {
-		b.WriteString(fmt.Sprintf("setfacl -b %s 2>/dev/null || true\n", shq(p.Path)))
+		b.WriteString(plainRevokeLines(p))
 	}
 	return b.String()
 }

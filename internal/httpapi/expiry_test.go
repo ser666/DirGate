@@ -17,12 +17,12 @@ func TestSweepExpiredLocksAccount(t *testing.T) {
 	ctx := context.Background()
 	sv, _ := srv.st.CreateServer(ctx, "s1", "10.0.0.1", 22, "root", "rp")
 
-	a, _ := srv.st.CreateAccount(ctx, sv.ID, "alice", "pw", true, true)
+	a, _ := srv.st.CreateAccount(ctx, sv.ID, "alice", "pw", true)
 	a.ExpiresAt = time.Now().UTC().Add(-time.Minute).Format(time.RFC3339) // 已过期
 	if err := srv.st.UpdateAccount(ctx, *a); err != nil {
 		t.Fatal(err)
 	}
-	b, _ := srv.st.CreateAccount(ctx, sv.ID, "bob", "pw", true, true) // 永不到期
+	b, _ := srv.st.CreateAccount(ctx, sv.ID, "bob", "pw", true) // 永不到期
 
 	srv.sweepExpired(ctx)
 
@@ -52,7 +52,7 @@ func TestSweepExpiredRetriesOnFailure(t *testing.T) {
 	ctx := context.Background()
 	sv, _ := srv.st.CreateServer(ctx, "s1", "10.0.0.1", 22, "root", "rp")
 
-	a, _ := srv.st.CreateAccount(ctx, sv.ID, "alice", "pw", true, true)
+	a, _ := srv.st.CreateAccount(ctx, sv.ID, "alice", "pw", true)
 	a.ExpiresAt = time.Now().UTC().Add(-time.Minute).Format(time.RFC3339)
 	_ = srv.st.UpdateAccount(ctx, *a)
 

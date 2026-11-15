@@ -36,7 +36,6 @@ type Account struct {
 	ServerID       string
 	Username       string
 	PasswordEnc    []byte
-	CodingCapable  bool
 	ExposedToAgent bool
 	Status         string
 	LastError      string
@@ -55,15 +54,14 @@ type DirectoryPermission struct {
 }
 
 type ExposedAccount struct {
-	ServerID      string
-	ServerName    string
-	Host          string
-	SSHPort       int
-	AccountID     string
-	Username      string
-	PasswordEnc   []byte
-	CodingCapable bool
-	Directories   []DirectoryPermission
+	ServerID    string
+	ServerName  string
+	Host        string
+	SSHPort     int
+	AccountID   string
+	Username    string
+	PasswordEnc []byte
+	Directories []DirectoryPermission
 }
 
 type Admin struct {

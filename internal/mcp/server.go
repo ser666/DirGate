@@ -13,14 +13,13 @@ import (
 )
 
 type accountDTO struct {
-	ServerID      string   `json:"server_id"`
-	ServerName    string   `json:"server_name"`
-	Host          string   `json:"host"`
-	SSHPort       int      `json:"ssh_port"`
-	Username      string   `json:"username"`
-	Password      string   `json:"password"`
-	CodingCapable bool     `json:"coding_capable"`
-	Directories   []dirDTO `json:"directories"`
+	ServerID    string   `json:"server_id"`
+	ServerName  string   `json:"server_name"`
+	Host        string   `json:"host"`
+	SSHPort     int      `json:"ssh_port"`
+	Username    string   `json:"username"`
+	Password    string   `json:"password"`
+	Directories []dirDTO `json:"directories"`
 }
 
 type dirDTO struct {
@@ -54,7 +53,7 @@ func NewHandler(st *store.Store, key []byte, token string) (http.Handler, error)
 				return nil, listAccountsResult{}, err
 			}
 			dto := accountDTO{ServerID: a.ServerID, ServerName: a.ServerName, Host: a.Host,
-				SSHPort: a.SSHPort, Username: a.Username, Password: string(pw), CodingCapable: a.CodingCapable}
+				SSHPort: a.SSHPort, Username: a.Username, Password: string(pw)}
 			for _, p := range a.Directories {
 				dto.Directories = append(dto.Directories, dirDTO{Path: p.Path, Mode: p.Mode})
 			}

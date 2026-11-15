@@ -10,7 +10,7 @@ func TestAccountCRUDAndPermissions(t *testing.T) {
 	ctx := context.Background()
 	sv, _ := s.CreateServer(ctx, "s1", "10.0.0.1", 22, "root", "rp")
 
-	a, err := s.CreateAccount(ctx, sv.ID, "alice", "alicepw", true, true)
+	a, err := s.CreateAccount(ctx, sv.ID, "alice", "alicepw", true)
 	if err != nil {
 		t.Fatal(err)
 	}

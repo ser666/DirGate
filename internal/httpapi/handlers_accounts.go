@@ -20,7 +20,6 @@ var (
 type accountInput struct {
 	Username       string            `json:"username"`
 	Password       string            `json:"password"`
-	CodingCapable  bool              `json:"coding_capable"`
 	ExposedToAgent bool              `json:"exposed_to_agent"`
 	ExpiresAt      string            `json:"expires_at"`
 	Permissions    []permissionInput `json:"permissions"`
@@ -35,7 +34,6 @@ type accountDTO struct {
 	ID             string            `json:"id"`
 	ServerID       string            `json:"server_id"`
 	Username       string            `json:"username"`
-	CodingCapable  bool              `json:"coding_capable"`
 	ExposedToAgent bool              `json:"exposed_to_agent"`
 	Status         string            `json:"status"`
 	LastError      string            `json:"last_error"`
@@ -45,8 +43,8 @@ type accountDTO struct {
 
 func toAccountDTO(a store.Account, perms []store.DirectoryPermission) accountDTO {
 	dto := accountDTO{ID: a.ID, ServerID: a.ServerID, Username: a.Username,
-		CodingCapable: a.CodingCapable, ExposedToAgent: a.ExposedToAgent,
-		Status: a.Status, LastError: a.LastError, ExpiresAt: a.ExpiresAt, Permissions: []permissionInput{}}
+		ExposedToAgent: a.ExposedToAgent,
+		Status:         a.Status, LastError: a.LastError, ExpiresAt: a.ExpiresAt, Permissions: []permissionInput{}}
 	for _, p := range perms {
 		dto.Permissions = append(dto.Permissions, permissionInput{Path: p.Path, Mode: p.Mode})
 	}
@@ -96,7 +94,7 @@ func (s *Server) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, r, http.StatusBadRequest, errAttachAccountMismatch.Error(), nil)
 		return
 	}
-	a, err := s.st.CreateAccount(r.Context(), serverID, in.Username, in.Password, in.CodingCapable, in.ExposedToAgent)
+	a, err := s.st.CreateAccount(r.Context(), serverID, in.Username, in.Password, in.ExposedToAgent)
 	if err != nil {
 		writeErr(w, r, http.StatusInternalServerError, "create failed", err)
 		return
@@ -219,16 +217,12 @@ func (s *Server) handleUpdateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		CodingCapable  *bool   `json:"coding_capable"`
 		ExposedToAgent *bool   `json:"exposed_to_agent"`
 		ExpiresAt      *string `json:"expires_at"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, r, http.StatusBadRequest, "invalid json", err)
 		return
-	}
-	if in.CodingCapable != nil {
-		a.CodingCapable = *in.CodingCapable
 	}
 	if in.ExposedToAgent != nil {
 		a.ExposedToAgent = *in.ExposedToAgent

@@ -73,11 +73,11 @@ func TestListExposedAccountsTool(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a1, err := st.CreateAccount(context.Background(), sv.ID, "alice", "alicepw", true, true)
+	a1, err := st.CreateAccount(context.Background(), sv.ID, "alice", "alicepw", true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreateAccount(context.Background(), sv.ID, "bob", "bobpw", false, false); err != nil {
+	if _, err := st.CreateAccount(context.Background(), sv.ID, "bob", "bobpw", false); err != nil {
 		t.Fatal(err)
 	}
 	perms := []store.DirectoryPermission{

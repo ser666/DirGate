@@ -97,7 +97,7 @@ func TestCreateAccountProvision(t *testing.T) {
 	h := srv.Handler()
 
 	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
-	body := `{"username":"alice","password":"alicepw","coding_capable":true,"exposed_to_agent":true,"permissions":[{"path":"/data/a","mode":"rw"}]}`
+	body := `{"username":"alice","password":"alicepw","exposed_to_agent":true,"permissions":[{"path":"/data/a","mode":"rw"}]}`
 	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/accounts", []byte(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -120,7 +120,7 @@ func TestUpdateAccountFlags(t *testing.T) {
 	h := srv.Handler()
 	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
 
-	body := `{"username":"alice","password":"pw","coding_capable":false,"exposed_to_agent":false,"permissions":[]}`
+	body := `{"username":"alice","password":"pw","exposed_to_agent":false,"permissions":[]}`
 	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/accounts", []byte(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -131,7 +131,7 @@ func TestUpdateAccountFlags(t *testing.T) {
 	json.Unmarshal(rec.Body.Bytes(), &created)
 
 	// 翻转两个标记，确认持久化且可通过 ListExposedAccounts 查到。
-	req = authedRequest(t, srv, h, "PUT", "/api/accounts/"+created.ID, []byte(`{"coding_capable":true,"exposed_to_agent":true}`))
+	req = authedRequest(t, srv, h, "PUT", "/api/accounts/"+created.ID, []byte(`{"exposed_to_agent":true}`))
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -139,7 +139,7 @@ func TestUpdateAccountFlags(t *testing.T) {
 	}
 
 	exposed, _ := srv.st.ListExposedAccounts(context.Background(), "9999-01-01T00:00:00Z")
-	if len(exposed) != 1 || !exposed[0].CodingCapable {
+	if len(exposed) != 1 {
 		t.Fatalf("exposed=%+v", exposed)
 	}
 }
@@ -168,7 +168,7 @@ func TestProvisionFailurePreservesFlags(t *testing.T) {
 	srv.exec = &failExec{err: fmt.Errorf("boom")}
 	h := srv.Handler()
 	sv, _ := srv.st.CreateServer(context.Background(), "s1", "10.0.0.1", 22, "root", "rp")
-	body := `{"username":"alice","password":"pw","coding_capable":true,"exposed_to_agent":true,"permissions":[]}`
+	body := `{"username":"alice","password":"pw","exposed_to_agent":true,"permissions":[]}`
 	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/accounts", []byte(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -176,8 +176,8 @@ func TestProvisionFailurePreservesFlags(t *testing.T) {
 		t.Fatalf("code=%d body=%s", rec.Code, rec.Body)
 	}
 	accs, _ := srv.st.ListAccounts(context.Background(), sv.ID)
-	// 建户失败仅标记 status=error，不得清空编码/暴露标志。
-	if len(accs) != 1 || !accs[0].CodingCapable || !accs[0].ExposedToAgent || accs[0].Status != store.StatusError {
+	// 建户失败仅标记 status=error，不得清空暴露标志。
+	if len(accs) != 1 || !accs[0].ExposedToAgent || accs[0].Status != store.StatusError {
 		t.Fatalf("flags lost: %+v", accs[0])
 	}
 }
@@ -194,7 +194,7 @@ func TestPlainModeAttach(t *testing.T) {
 	_ = srv.st.UpdateServer(context.Background(), *sv)
 
 	// 1) attach 管理账户本人：应走 AttachVerify 路径
-	body := `{"username":"dev","password":"devpw","coding_capable":true,"exposed_to_agent":true,"permissions":[{"path":"/home/dev/proj","mode":"rw"}]}`
+	body := `{"username":"dev","password":"devpw","exposed_to_agent":true,"permissions":[{"path":"/home/dev/proj","mode":"rw"}]}`
 	req := authedRequest(t, srv, h, "POST", "/api/servers/"+sv.ID+"/accounts", []byte(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)

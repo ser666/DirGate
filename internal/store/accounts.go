@@ -7,7 +7,7 @@ import (
 	"serveragentlink/internal/crypto"
 )
 
-func (s *Store) CreateAccount(ctx context.Context, serverID, username, password string, codingCapable, exposed bool) (*Account, error) {
+func (s *Store) CreateAccount(ctx context.Context, serverID, username, password string, exposed bool) (*Account, error) {
 	id, err := crypto.RandomID()
 	if err != nil {
 		return nil, err
@@ -18,12 +18,12 @@ func (s *Store) CreateAccount(ctx context.Context, serverID, username, password 
 	}
 	now := nowUTC()
 	a := &Account{ID: id, ServerID: serverID, Username: username, PasswordEnc: enc,
-		CodingCapable: codingCapable, ExposedToAgent: exposed, Status: StatusPending,
+		ExposedToAgent: exposed, Status: StatusPending,
 		CreatedAt: now, UpdatedAt: now}
 	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO accounts (id,server_id,username,password_enc,coding_capable,exposed_to_agent,status,last_error,expires_at,created_at,updated_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-		a.ID, a.ServerID, a.Username, a.PasswordEnc, boolInt(a.CodingCapable), boolInt(a.ExposedToAgent),
+		`INSERT INTO accounts (id,server_id,username,password_enc,exposed_to_agent,status,last_error,expires_at,created_at,updated_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		a.ID, a.ServerID, a.Username, a.PasswordEnc, boolInt(a.ExposedToAgent),
 		a.Status, a.LastError, a.ExpiresAt, a.CreatedAt, a.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -33,14 +33,14 @@ func (s *Store) CreateAccount(ctx context.Context, serverID, username, password 
 
 func (s *Store) GetAccount(ctx context.Context, id string) (*Account, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id,server_id,username,password_enc,coding_capable,exposed_to_agent,status,last_error,expires_at,created_at,updated_at
+		`SELECT id,server_id,username,password_enc,exposed_to_agent,status,last_error,expires_at,created_at,updated_at
 		 FROM accounts WHERE id=?`, id)
 	return scanAccount(row)
 }
 
 func (s *Store) ListAccounts(ctx context.Context, serverID string) ([]Account, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id,server_id,username,password_enc,coding_capable,exposed_to_agent,status,last_error,expires_at,created_at,updated_at
+		`SELECT id,server_id,username,password_enc,exposed_to_agent,status,last_error,expires_at,created_at,updated_at
 		 FROM accounts WHERE server_id=? ORDER BY username`, serverID)
 	if err != nil {
 		return nil, err
@@ -60,8 +60,8 @@ func (s *Store) ListAccounts(ctx context.Context, serverID string) ([]Account, e
 // UpdateAccount 只更新标志与状态列，不触碰密码密文，避免读-改-写覆盖并发变更。
 func (s *Store) UpdateAccount(ctx context.Context, a Account) error {
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE accounts SET coding_capable=?,exposed_to_agent=?,status=?,last_error=?,expires_at=?,updated_at=? WHERE id=?`,
-		boolInt(a.CodingCapable), boolInt(a.ExposedToAgent), a.Status, a.LastError, a.ExpiresAt, nowUTC(), a.ID)
+		`UPDATE accounts SET exposed_to_agent=?,status=?,last_error=?,expires_at=?,updated_at=? WHERE id=?`,
+		boolInt(a.ExposedToAgent), a.Status, a.LastError, a.ExpiresAt, nowUTC(), a.ID)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func (s *Store) MarkAccountActive(ctx context.Context, id string) error {
 // 供回收器逐个锁定 OS 用户。
 func (s *Store) ListExpiringAccounts(ctx context.Context, now string) ([]Account, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id,server_id,username,password_enc,coding_capable,exposed_to_agent,status,last_error,expires_at,created_at,updated_at
+		`SELECT id,server_id,username,password_enc,exposed_to_agent,status,last_error,expires_at,created_at,updated_at
 		 FROM accounts WHERE expires_at != '' AND expires_at <= ? AND status != ?`,
 		now, StatusLocked)
 	if err != nil {
@@ -210,7 +210,7 @@ func (s *Store) ListPermissions(ctx context.Context, accountID string) ([]Direct
 // 到期账户（expires_at 已过）不再暴露。
 func (s *Store) ListExposedAccounts(ctx context.Context, now string) ([]ExposedAccount, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT sv.id, sv.name, sv.host, sv.ssh_port, a.id, a.username, a.password_enc, a.coding_capable,
+		`SELECT sv.id, sv.name, sv.host, sv.ssh_port, a.id, a.username, a.password_enc,
 		        p.path, p.mode
 		 FROM accounts a
 		 JOIN servers sv ON sv.id = a.server_id
@@ -225,13 +225,11 @@ func (s *Store) ListExposedAccounts(ctx context.Context, now string) ([]ExposedA
 	var out []ExposedAccount
 	for rows.Next() {
 		var e ExposedAccount
-		var coding int
 		var path, mode sql.NullString
 		if err := rows.Scan(&e.ServerID, &e.ServerName, &e.Host, &e.SSHPort, &e.AccountID,
-			&e.Username, &e.PasswordEnc, &coding, &path, &mode); err != nil {
+			&e.Username, &e.PasswordEnc, &path, &mode); err != nil {
 			return nil, err
 		}
-		e.CodingCapable = coding == 1
 		if path.Valid { // LEFT JOIN 无权限的账户只有一行 NULL
 			e.Directories = append(e.Directories, DirectoryPermission{Path: path.String, Mode: mode.String})
 		}
@@ -247,8 +245,8 @@ func (s *Store) ListExposedAccounts(ctx context.Context, now string) ([]ExposedA
 
 func scanAccount(r rowScanner) (*Account, error) {
 	var a Account
-	var coding, exposed int
-	err := r.Scan(&a.ID, &a.ServerID, &a.Username, &a.PasswordEnc, &coding, &exposed,
+	var exposed int
+	err := r.Scan(&a.ID, &a.ServerID, &a.Username, &a.PasswordEnc, &exposed,
 		&a.Status, &a.LastError, &a.ExpiresAt, &a.CreatedAt, &a.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
@@ -256,7 +254,6 @@ func scanAccount(r rowScanner) (*Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	a.CodingCapable = coding == 1
 	a.ExposedToAgent = exposed == 1
 	return &a, nil
 }

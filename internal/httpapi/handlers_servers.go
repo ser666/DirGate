@@ -15,6 +15,7 @@ type serverInput struct {
 	RootUser     string `json:"root_user"`
 	RootPassword string `json:"root_password"`
 	ResetHostKey bool   `json:"reset_host_key"`
+	Enabled      *bool  `json:"enabled"` // 停用后整台服务器的账户从 MCP 撤下
 }
 
 // serverDTO 是 server 的对外视图，绝不包含 RootPasswordEnc。
@@ -116,6 +117,9 @@ func (s *Server) handleUpdateServer(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.ResetHostKey {
 		sv.HostKey = ""
+	}
+	if in.Enabled != nil {
+		sv.Enabled = *in.Enabled
 	}
 	if err := s.st.UpdateServer(r.Context(), *sv); err != nil {
 		writeErr(w, r, http.StatusInternalServerError, "update failed", err)

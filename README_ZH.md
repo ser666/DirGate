@@ -22,7 +22,7 @@
 ./run.sh            # 生成 .env → 构建单二进制 → 启动；随机管理员密码写入 data/admin-password.txt
 ```
 
-浏览器打开 `http://localhost:8080/login` 登录：添加服务器 → 建账户（真实 OS 用户 + 逐目录 ACL）→ 打开「暴露」开关。
+浏览器打开 `http://localhost:8080/login` 登录：添加服务器 → 建/接入账户（真实 OS 用户 + 逐目录 ACL）→ 打开「暴露」开关 → 可选设置到期。
 
 ```bash
 # agent 端（一次调用，缓存到 agent 上下文）

@@ -56,8 +56,8 @@ func TestListExpiringAccounts(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	sv, _ := s.CreateServer(ctx, "s1", "10.0.0.1", 22, "root", "rp")
-	a, _ := s.CreateAccount(ctx, sv.ID, "alice", "pw", true, true)
-	b, _ := s.CreateAccount(ctx, sv.ID, "bob", "pw", true, true)
+	a, _ := s.CreateAccount(ctx, sv.ID, "alice", "pw", true)
+	b, _ := s.CreateAccount(ctx, sv.ID, "bob", "pw", true)
 	a.ExpiresAt = "2026-01-01T00:00:00Z"
 	_ = s.UpdateAccount(ctx, *a)
 	b.ExpiresAt = "2030-01-01T00:00:00Z"

@@ -183,9 +183,18 @@ func TestBuildAttachPermScript(t *testing.T) {
 
 func TestBuildAttachLockScript(t *testing.T) {
 	script := BuildAttachLockScript([]PermissionSpec{{Path: "/home/dev/a", Mode: "rw"}})
-	// setfacl -b 清全部 ACL（含默认），幂等容忍不存在
-	if !strings.Contains(script, "setfacl -b '/home/dev/a'") {
-		t.Fatalf("lock script missing setfacl -b:\n%s", script)
+	// 只撤自身条目（含默认 ACL 条目），幂等容忍不存在。
+	// 绝不用 setfacl -b：它会清掉目录上所有人的 ACL，误伤同目录其他授权。
+	for _, want := range []string{
+		"setfacl -x u:$LOGNAME '/home/dev/a'",
+		"setfacl -x d:u:$LOGNAME '/home/dev/a'",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("lock script missing %q:\n%s", want, script)
+		}
+	}
+	if strings.Contains(script, "setfacl -b") {
+		t.Fatalf("plain lock must not use -b (would revoke other users' ACLs):\n%s", script)
 	}
 	if strings.Contains(script, "usermod") || strings.Contains(script, "userdel") {
 		t.Fatalf("plain lock must not touch OS account:\n%s", script)

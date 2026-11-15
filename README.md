@@ -22,7 +22,7 @@ The core idea: **authorization as the boundary**. Real access control is enforce
 ./run.sh            # generates .env → builds single binary → starts; random admin password in data/admin-password.txt
 ```
 
-Open `http://localhost:8080/login`: add a server → create accounts (real OS users + per-directory ACLs) → flip the "expose" switch.
+Open `http://localhost:8080/login`: add a server → create or attach accounts (real OS users + per-directory ACLs) → flip the "Expose" switch → optionally set an expiry.
 
 ```bash
 # Agent side (one call, cache into agent context)

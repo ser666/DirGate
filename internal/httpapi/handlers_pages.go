@@ -19,13 +19,12 @@ type accountView struct {
 }
 
 type exposedAccountView struct {
-	ServerID      string
-	ServerName    string
-	Host          string
-	SSHPort       int
-	Username      string
-	CodingCapable bool
-	Directories   []store.DirectoryPermission
+	ServerID    string
+	ServerName  string
+	Host        string
+	SSHPort     int
+	Username    string
+	Directories []store.DirectoryPermission
 }
 
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
@@ -60,13 +59,12 @@ func (s *Server) handleServersPage(w http.ResponseWriter, r *http.Request) {
 	expViews := make([]exposedAccountView, 0, len(exposed))
 	for _, e := range exposed {
 		expViews = append(expViews, exposedAccountView{
-			ServerID:      e.ServerID,
-			ServerName:    e.ServerName,
-			Host:          e.Host,
-			SSHPort:       e.SSHPort,
-			Username:      e.Username,
-			CodingCapable: e.CodingCapable,
-			Directories:   e.Directories,
+			ServerID:    e.ServerID,
+			ServerName:  e.ServerName,
+			Host:        e.Host,
+			SSHPort:     e.SSHPort,
+			Username:    e.Username,
+			Directories: e.Directories,
 		})
 	}
 	s.render(w, "servers", map[string]any{"Authed": true, "Servers": views, "Exposed": expViews})
