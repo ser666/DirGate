@@ -48,7 +48,7 @@ Driving Claude Code is one example: run `claude -p "<task>"` inside a granted di
 
 ## Documentation
 
-- [Guide (Chinese)](docs/使用说明.md) — environment variables, API reference, MCP onboarding, security model, backup/restore, troubleshooting
+- [Guide](docs/USER_GUIDE_EN.md) · [指南（中文）](docs/使用说明.md) — environment variables, API reference, MCP onboarding, security model, backup/restore, troubleshooting
 - [deploy/](deploy/) — systemd unit template and backup script
 - [.env.example](.env.example) — annotated configuration reference
 

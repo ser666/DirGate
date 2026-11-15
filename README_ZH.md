@@ -48,7 +48,7 @@ sshpass -p '<password>' ssh coder1@10.0.0.5 'cd /data/repo && <任意命令>'
 
 ## 文档
 
-- [使用说明](docs/使用说明.md)——环境变量、API 参考、MCP 接入、安全模型、备份恢复、常见故障
+- [使用说明](docs/使用说明.md) · [User Guide](docs/USER_GUIDE_EN.md)——环境变量、API 参考、MCP 接入、安全模型、备份恢复、常见故障
 - [deploy/](deploy/)——systemd 单元模板与备份脚本
 - [.env.example](.env.example)——全部配置项注释
 
