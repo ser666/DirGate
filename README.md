@@ -37,6 +37,25 @@ sshpass -p '<password>' ssh coder1@10.0.0.5 'cd /data/repo && <any command>'
 
 Driving Claude Code is one example: run `claude -p "<task>"` inside a granted directory — the platform doesn't care what runs there.
 
+### Or manage it from the CLI
+
+The same binary ships a `ctl` subcommand that drives a **running** service over its REST API — no UI, no config edits:
+
+```bash
+export SAL_SERVER_URL=http://127.0.0.1:18080   # or set SAL_LISTEN_ADDR; default http://127.0.0.1:8080
+export SAL_ADMIN_PASSWORD=...                   # admin login
+export SAL_MCP_TOKEN=...                        # only for `exposed`
+
+server-agent-link ctl servers                                       # list servers
+server-agent-link ctl server-add dev1 10.0.0.5 22 root prod         # add (tag: prod)
+server-agent-link ctl server-test <id>                              # probe root/sudo/plain tier
+server-agent-link ctl account-add <id> coder1 'pass' '/data/repo=rw,/logs=ro' '2026-12-31T23:59:59+08:00'
+server-agent-link ctl account-expose <account-id> on                # exposure switch
+server-agent-link ctl exposed                                       # agent's view (passwords masked)
+```
+
+`server-agent-link ctl` prints all 14 commands. Writes share the same API and audit trail as the Web UI. Full reference: the CLI section in the [Guide](docs/USER_GUIDE_EN.md).
+
 ## Features
 
 - **Real provisioning**: `useradd` / `chpasswd` / `setfacl` / `userdel` executed for real; non-root admin accounts escalate via `sudo -n` automatically
