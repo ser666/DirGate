@@ -206,11 +206,24 @@ func (s *Store) ListPermissions(ctx context.Context, accountID string) ([]Direct
 	return out, rows.Err()
 }
 
+// ExposedRevision 返回当前暴露目录的全局版本号（暴露账户 updated_at 的最大值，空目录返回空串）。
+// 供 MCP 输出 revision 字段，agent 据此判断凭据是否变更。
+func (s *Store) ExposedRevision(ctx context.Context) (string, error) {
+	var rev sql.NullString
+	err := s.db.QueryRowContext(ctx,
+		`SELECT MAX(a.updated_at) FROM accounts a JOIN servers sv ON sv.id = a.server_id
+		 WHERE a.exposed_to_agent = 1 AND sv.enabled = 1`).Scan(&rev)
+	if err != nil {
+		return "", err
+	}
+	return rev.String, nil
+}
+
 // ListExposedAccounts 一次性 JOIN 取出暴露账户及其目录权限，供 MCP 与首页概览复用；
 // 到期账户（expires_at 已过）不再暴露。
 func (s *Store) ListExposedAccounts(ctx context.Context, now string) ([]ExposedAccount, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT sv.id, sv.name, sv.host, sv.ssh_port, a.id, a.username, a.password_enc,
+		`SELECT sv.id, sv.name, sv.host, sv.ssh_port, a.id, a.username, a.password_enc, a.expires_at, sv.tag,
 		        p.path, p.mode
 		 FROM accounts a
 		 JOIN servers sv ON sv.id = a.server_id
@@ -227,7 +240,7 @@ func (s *Store) ListExposedAccounts(ctx context.Context, now string) ([]ExposedA
 		var e ExposedAccount
 		var path, mode sql.NullString
 		if err := rows.Scan(&e.ServerID, &e.ServerName, &e.Host, &e.SSHPort, &e.AccountID,
-			&e.Username, &e.PasswordEnc, &path, &mode); err != nil {
+			&e.Username, &e.PasswordEnc, &e.ExpiresAt, &e.Tag, &path, &mode); err != nil {
 			return nil, err
 		}
 		if path.Valid { // LEFT JOIN 无权限的账户只有一行 NULL

@@ -73,6 +73,10 @@ func TestListExposedAccountsTool(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sv.Tag = "prod"
+	if err := st.UpdateServer(context.Background(), *sv); err != nil {
+		t.Fatal(err)
+	}
 	a1, err := st.CreateAccount(context.Background(), sv.ID, "alice", "alicepw", true)
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +108,10 @@ func TestListExposedAccountsTool(t *testing.T) {
 	if !bytes.Contains(rec.Body.Bytes(), []byte(`"username":"alice"`)) {
 		t.Fatalf("missing alice: %s", raw)
 	}
-	if !bytes.Contains(rec.Body.Bytes(), []byte(`"password":"alicepw"`)) {
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"password":"alicepw"`)) ||
+		!bytes.Contains(rec.Body.Bytes(), []byte(`"revision":"`)) ||
+		!bytes.Contains(rec.Body.Bytes(), []byte(`"expires_at":""`)) ||
+		!bytes.Contains(rec.Body.Bytes(), []byte(`"tag":"prod"`)) {
 		t.Fatalf("missing decrypted password: %s", raw)
 	}
 	if bytes.Contains(rec.Body.Bytes(), []byte(`"bob"`)) {

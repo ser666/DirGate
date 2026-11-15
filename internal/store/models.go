@@ -27,8 +27,10 @@ type Server struct {
 	LastVerifiedAt  string // RFC3339，空串表示未验证
 	// AccessMode 管理账户能力级别：root | sudo | plain（attach-only）。空串 = 尚未探测。
 	AccessMode string
-	CreatedAt  string
-	UpdatedAt  string
+	// Tag 语义标签（如 prod / test / <project>），随 MCP 透传给 agent 供路由。空串 = 无标签。
+	Tag       string
+	CreatedAt string
+	UpdatedAt string
 }
 
 type Account struct {
@@ -61,6 +63,8 @@ type ExposedAccount struct {
 	AccountID   string
 	Username    string
 	PasswordEnc []byte
+	ExpiresAt   string // RFC3339，空串 = 永不到期；透传给 agent 供其自我判断可用窗口
+	Tag         string // 服务器标签（语义分组：prod/test/<project>…），透传给 agent 路由
 	Directories []DirectoryPermission
 }
 

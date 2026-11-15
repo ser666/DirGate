@@ -73,3 +73,35 @@ func TestAccountCRUDAndPermissions(t *testing.T) {
 		t.Fatal("expected not found")
 	}
 }
+
+// ExposedRevision 返回暴露账户的最大 updated_at；改密/翻转开关后 revision 变化。
+func TestExposedRevision(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	sv, _ := s.CreateServer(ctx, "s1", "10.0.0.1", 22, "root", "rp")
+
+	a, _ := s.CreateAccount(ctx, sv.ID, "alice", "pw", true)
+	rev1, err := s.ExposedRevision(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rev1 == "" {
+		t.Fatal("exposed account must yield non-empty revision")
+	}
+
+	// 翻转暴露开关 → revision 变化
+	a.ExposedToAgent = !a.ExposedToAgent
+	_ = s.UpdateAccount(ctx, *a)
+	rev2, _ := s.ExposedRevision(ctx)
+	if rev2 == rev1 {
+		t.Fatal("revision must change after exposure toggle")
+	}
+
+	// 停用服务器 → 无暴露账户 → 空串
+	sv.Enabled = false
+	_ = s.UpdateServer(ctx, *sv)
+	rev3, _ := s.ExposedRevision(ctx)
+	if rev3 != "" {
+		t.Fatalf("no exposed accounts should give empty revision, got %q", rev3)
+	}
+}

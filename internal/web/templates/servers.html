@@ -19,6 +19,7 @@
       <label><span data-i18n="ssh_port">SSH 端口</span><input name="ssh_port" type="number" value="22" placeholder="22"></label>
       <label><span data-i18n="root_user">root 用户</span><input name="root_user" value="root" placeholder="root"></label>
       <label><span data-i18n="root_password">root 密码</span><input name="root_password" type="password" required></label>
+      <label><span data-i18n="tag">标签</span><span class="hint" style="font-weight:400;color:var(--muted)" data-i18n="tag_hint">prod / test / 项目名，随 MCP 透传给 agent</span><input name="tag" placeholder="prod"></label>
       <div class="form-actions"><button type="submit" class="btn btn-primary" data-i18n="add_server">添加服务器</button></div>
     </form>
   </section>
@@ -33,7 +34,7 @@
       <tbody>
       {{range .Servers}}
         <tr>
-          <td><a class="mono" href="/servers/{{.ID}}">{{.Name}}</a></td>
+          <td><a class="mono" href="/servers/{{.ID}}">{{.Name}}</a>{{if .Tag}} <span class="badge badge-pending" style="font-size:10px">{{.Tag}}</span>{{end}}</td>
           <td><span class="mono">{{.Host}}:{{.SSHPort}}</span></td>
           <td id="st-{{.ID}}">{{if .Verified}}<span class="dot dot-ok"></span><span data-i18n="verified">已验证</span>{{if .AccessMode}} · <span class="mono" style="font-size:11px">{{.AccessMode}}</span>{{end}}{{else}}<span class="dot dot-dim"></span><span data-i18n="unverified">未验证</span>{{end}}</td>
           <td><span class="mono">{{.AccountCount}}</span></td>
@@ -81,7 +82,8 @@ salSubmit('add-server', '/api/servers', function (fd) {
     name: fd.get('name'), host: fd.get('host'),
     ssh_port: parseInt(fd.get('ssh_port') || '22', 10),
     root_user: fd.get('root_user') || 'root',
-    root_password: fd.get('root_password')
+    root_password: fd.get('root_password'),
+    tag: (fd.get('tag') || '').trim()
   };
 });
 </script>

@@ -26,9 +26,9 @@ func (s *Store) CreateServer(ctx context.Context, name, host string, port int, r
 	sv := &Server{ID: id, Name: name, Host: host, SSHPort: port, RootUser: rootUser,
 		RootPasswordEnc: enc, Enabled: true, CreatedAt: now, UpdatedAt: now}
 	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO servers (id,name,host,ssh_port,root_user,root_password_enc,host_key,enabled,last_verified_at,access_mode,created_at,updated_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-		sv.ID, sv.Name, sv.Host, sv.SSHPort, sv.RootUser, sv.RootPasswordEnc, sv.HostKey, boolInt(sv.Enabled), sv.LastVerifiedAt, sv.AccessMode, now, now)
+		`INSERT INTO servers (id,name,host,ssh_port,root_user,root_password_enc,host_key,enabled,last_verified_at,access_mode,tag,created_at,updated_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		sv.ID, sv.Name, sv.Host, sv.SSHPort, sv.RootUser, sv.RootPasswordEnc, sv.HostKey, boolInt(sv.Enabled), sv.LastVerifiedAt, sv.AccessMode, sv.Tag, now, now)
 	if err != nil {
 		return nil, err
 	}
@@ -37,14 +37,14 @@ func (s *Store) CreateServer(ctx context.Context, name, host string, port int, r
 
 func (s *Store) GetServer(ctx context.Context, id string) (*Server, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id,name,host,ssh_port,root_user,root_password_enc,host_key,enabled,last_verified_at,access_mode,created_at,updated_at
+		`SELECT id,name,host,ssh_port,root_user,root_password_enc,host_key,enabled,last_verified_at,access_mode,tag,created_at,updated_at
 		 FROM servers WHERE id=?`, id)
 	return scanServer(row)
 }
 
 func (s *Store) ListServers(ctx context.Context) ([]Server, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id,name,host,ssh_port,root_user,root_password_enc,host_key,enabled,last_verified_at,access_mode,created_at,updated_at
+		`SELECT id,name,host,ssh_port,root_user,root_password_enc,host_key,enabled,last_verified_at,access_mode,tag,created_at,updated_at
 		 FROM servers ORDER BY name`)
 	if err != nil {
 		return nil, err
@@ -64,8 +64,8 @@ func (s *Store) ListServers(ctx context.Context) ([]Server, error) {
 func (s *Store) UpdateServer(ctx context.Context, sv Server) error {
 	sv.UpdatedAt = nowUTC()
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE servers SET name=?,host=?,ssh_port=?,root_user=?,root_password_enc=?,host_key=?,enabled=?,last_verified_at=?,access_mode=?,updated_at=? WHERE id=?`,
-		sv.Name, sv.Host, sv.SSHPort, sv.RootUser, sv.RootPasswordEnc, sv.HostKey, boolInt(sv.Enabled), sv.LastVerifiedAt, sv.AccessMode, nowUTC(), sv.ID)
+		`UPDATE servers SET name=?,host=?,ssh_port=?,root_user=?,root_password_enc=?,host_key=?,enabled=?,last_verified_at=?,access_mode=?,tag=?,updated_at=? WHERE id=?`,
+		sv.Name, sv.Host, sv.SSHPort, sv.RootUser, sv.RootPasswordEnc, sv.HostKey, boolInt(sv.Enabled), sv.LastVerifiedAt, sv.AccessMode, sv.Tag, nowUTC(), sv.ID)
 	return err
 }
 
@@ -116,7 +116,7 @@ func scanServer(r rowScanner) (*Server, error) {
 	var sv Server
 	var enabled int
 	err := r.Scan(&sv.ID, &sv.Name, &sv.Host, &sv.SSHPort, &sv.RootUser, &sv.RootPasswordEnc,
-		&sv.HostKey, &enabled, &sv.LastVerifiedAt, &sv.AccessMode, &sv.CreatedAt, &sv.UpdatedAt)
+		&sv.HostKey, &enabled, &sv.LastVerifiedAt, &sv.AccessMode, &sv.Tag, &sv.CreatedAt, &sv.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}

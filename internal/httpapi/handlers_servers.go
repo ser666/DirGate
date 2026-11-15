@@ -16,6 +16,7 @@ type serverInput struct {
 	RootPassword string `json:"root_password"`
 	ResetHostKey bool   `json:"reset_host_key"`
 	Enabled      *bool  `json:"enabled"` // 停用后整台服务器的账户从 MCP 撤下
+	Tag          string `json:"tag"`
 }
 
 // serverDTO 是 server 的对外视图，绝不包含 RootPasswordEnc。
@@ -27,11 +28,12 @@ type serverDTO struct {
 	RootUser   string `json:"root_user"`
 	Enabled    bool   `json:"enabled"`
 	AccessMode string `json:"access_mode"`
+	Tag        string `json:"tag"`
 }
 
 func toServerDTO(sv store.Server) serverDTO {
 	return serverDTO{ID: sv.ID, Name: sv.Name, Host: sv.Host, SSHPort: sv.SSHPort,
-		RootUser: sv.RootUser, Enabled: sv.Enabled, AccessMode: sv.AccessMode}
+		RootUser: sv.RootUser, Enabled: sv.Enabled, AccessMode: sv.AccessMode, Tag: sv.Tag}
 }
 
 func (s *Server) handleListServers(w http.ResponseWriter, r *http.Request) {
@@ -120,6 +122,9 @@ func (s *Server) handleUpdateServer(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Enabled != nil {
 		sv.Enabled = *in.Enabled
+	}
+	if in.Tag != "" {
+		sv.Tag = in.Tag
 	}
 	if err := s.st.UpdateServer(r.Context(), *sv); err != nil {
 		writeErr(w, r, http.StatusInternalServerError, "update failed", err)

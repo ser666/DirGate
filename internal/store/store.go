@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS admin (
 	`DROP TABLE IF EXISTS settings;`,
 	// v4: 服务器管理能力级别（root | sudo | plain；plain = attach-only，无特权账户）。
 	`ALTER TABLE servers ADD COLUMN access_mode TEXT NOT NULL DEFAULT '';`,
+	// v5: 服务器语义标签，随 MCP 透传给 agent 供路由（如 prod / test / <project>）。
+	`ALTER TABLE servers ADD COLUMN tag TEXT NOT NULL DEFAULT '';`,
 }
 
 func (s *Store) migrate() error {
