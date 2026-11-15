@@ -17,6 +17,8 @@ The core idea: **authorization as the boundary**. Real access control is enforce
 
 ## Quick start
 
+Requires Go 1.26+ to build (the result is a single static binary — target machines need nothing but the binary and SSH access to the servers being managed; target servers need the `acl` package).
+
 ```bash
 # Server side (any Linux host)
 ./run.sh            # generates .env → builds single binary → starts; random admin password in data/admin-password.txt
