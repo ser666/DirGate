@@ -1,0 +1,66 @@
+name: Release
+
+# 打 tag（如 v0.1.0）自动构建全平台静态二进制并发布到 GitHub Releases。
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: # 允许手动触发（用当前 main 构建）
+
+permissions:
+  contents: write # 创建 Release 需要写权限
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0 # 纯 Go + modernc/sqlite，静态链接，拷贝即跑
+        run: |
+          name="dirgate-${GOOS}-${GOARCH}${{ matrix.ext }}"
+          go build -trimpath -ldflags "-s -w" -o "dist/${name}" ./cmd/dirgate
+          echo "dist/${name}" >> dist/files.txt
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/
+
+  release:
+    needs: build
+    if: github.event_name == 'push' # 手动触发只构建不发布
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/dirgate-*
+          generate_release_notes: true

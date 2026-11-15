@@ -17,7 +17,9 @@ The core idea: **authorization as the boundary**. Real access control is enforce
 
 ## Quick start
 
-Requires Go 1.26+ to build (the result is a single static binary — target machines need nothing but the binary and SSH access to the servers being managed; target servers need the `acl` package).
+**Prebuilt binaries** (linux/darwin/windows, amd64+arm64) are on the [Releases](https://github.com/ser666/DirGate/releases) page — download, `chmod +x`, run. No Go needed.
+
+Otherwise, build requires Go 1.26+: (the result is a single static binary — target machines need nothing but the binary and SSH access to the servers being managed; target servers need the `acl` package).
 
 ```bash
 # Server side (any Linux host)

@@ -82,7 +82,11 @@ DirGate securely exposes **directories across multiple servers to your local age
 
 ## 2. Installation & deployment
 
-### 2.1 One command (recommended)
+### 2.1 Prebuilt binaries (no Go needed)
+
+Download `dirgate-<os>-<arch>` from [Releases](https://github.com/ser666/DirGate/releases), `chmod +x`, provide a `.env` (copy from `.env.example`), run. Binaries are static — copy them to any machine of the same OS/arch.
+
+### 2.2 One command (builds from source)
 
 ```bash
 ./run.sh
@@ -90,7 +94,7 @@ DirGate securely exposes **directories across multiple servers to your local age
 
 The script generates `.env` if missing (filling `DG_MCP_TOKEN` with a random strong value), builds the single binary, and starts it.
 
-### 2.2 Manual build & run
+### 2.3 Manual build & run
 
 ```bash
 cp .env.example .env            # edit as needed; at minimum set DG_MCP_TOKEN
@@ -98,14 +102,14 @@ go build -o dirgate ./cmd/dirgate
 ./dirgate             # reads .env; real environment variables win
 ```
 
-### 2.3 Cross-compile for machines without Go
+### 2.4 Cross-compile for machines without Go
 
 ```bash
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dirgate ./cmd/dirgate
 # copy the binary to the target machine, provide .env, run
 ```
 
-### 2.4 systemd production deployment
+### 2.5 systemd production deployment
 
 The unit template lives at [deploy/dirgate.service](../deploy/dirgate.service):
 
@@ -124,7 +128,7 @@ The unit ships with auto-restart, `ProtectSystem=strict` hardening, and journald
 journalctl -t dirgate -g audit
 ```
 
-### 2.5 Target server prerequisites
+### 2.6 Target server prerequisites
 
 Permission enforcement uses POSIX ACL. Target servers need:
 
@@ -133,7 +137,7 @@ Permission enforcement uses POSIX ACL. Target servers need:
 
 Otherwise `setfacl` fails and the account is marked `error` (reason shown inline on the detail page).
 
-### 2.6 Port notes
+### 2.7 Port notes
 
 Some corporate host firewalls DROP common web ports such as 8080/8081 (loopback included). If the service is listening but the browser can't reach it, switch to a high port (e.g. `DG_LISTEN_ADDR=:18080`) before debugging the firewall.
 
