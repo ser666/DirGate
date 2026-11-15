@@ -20,10 +20,10 @@ import (
 // 服务地址默认 http://127.0.0.1:18080 —— 与 run.sh 的默认端口一致；
 // .env 由 config.LoadDotEnv 已在 main 入口加载，此处直接读环境变量。
 func ctlBaseURL() string {
-	if v := os.Getenv("SAL_SERVER_URL"); v != "" {
+	if v := os.Getenv("DG_SERVER_URL"); v != "" {
 		return strings.TrimRight(v, "/")
 	}
-	listen := os.Getenv("SAL_LISTEN_ADDR")
+	listen := os.Getenv("DG_LISTEN_ADDR")
 	if listen == "" {
 		listen = ":8080"
 	}
@@ -50,8 +50,8 @@ func newCtlClient() (*ctlClient, error) {
 
 // ctlLogin 用管理员密码登录，缓存 CSRF token 供后续状态变更请求。
 func (c *ctlClient) ctlLogin(password string) error {
-	body, _ := json.Marshal(map[string]string{"username": os.Getenv("SAL_ADMIN_USER"), "password": password})
-	if os.Getenv("SAL_ADMIN_USER") == "" {
+	body, _ := json.Marshal(map[string]string{"username": os.Getenv("DG_ADMIN_USER"), "password": password})
+	if os.Getenv("DG_ADMIN_USER") == "" {
 		body, _ = json.Marshal(map[string]string{"username": "admin", "password": password})
 	}
 	resp, err := c.http.Post(c.base+"/api/login", "application/json", bytes.NewReader(body))
@@ -64,7 +64,7 @@ func (c *ctlClient) ctlLogin(password string) error {
 		return fmt.Errorf("login failed: HTTP %d %s", resp.StatusCode, strings.TrimSpace(string(b)))
 	}
 	for _, ck := range resp.Cookies() {
-		if ck.Name == "sal_csrf" {
+		if ck.Name == "dg_csrf" {
 			c.csrf = ck.Value
 		}
 	}
@@ -121,8 +121,8 @@ func (c *ctlClient) ctlDo(method, path string, in any) (map[string]any, error) {
 //
 //	dirgate ctl <command> [args]
 //
-// 环境变量：SAL_SERVER_URL（服务地址，默认从 SAL_LISTEN_ADDR 推导）、
-// SAL_ADMIN_USER（默认 admin）、SAL_ADMIN_PASSWORD（登录密码，必填）。
+// 环境变量：DG_SERVER_URL（服务地址，默认从 DG_LISTEN_ADDR 推导）、
+// DG_ADMIN_USER（默认 admin）、DG_ADMIN_PASSWORD（登录密码，必填）。
 //
 // 命令：
 //
@@ -146,13 +146,13 @@ func runCtl(args []string) int {
 		fmt.Fprintln(os.Stderr, ctlUsage)
 		return 2
 	}
-	// exposed 走 MCP（只需 SAL_MCP_TOKEN），不要求管理员登录。
+	// exposed 走 MCP（只需 DG_MCP_TOKEN），不要求管理员登录。
 	if args[0] == "exposed" {
 		return ctlExposed()
 	}
-	pw := os.Getenv("SAL_ADMIN_PASSWORD")
+	pw := os.Getenv("DG_ADMIN_PASSWORD")
 	if pw == "" {
-		fmt.Fprintln(os.Stderr, "ctl: SAL_ADMIN_PASSWORD must be set (admin login for the running service)")
+		fmt.Fprintln(os.Stderr, "ctl: DG_ADMIN_PASSWORD must be set (admin login for the running service)")
 		return 2
 	}
 	c, err := newCtlClient()
@@ -308,9 +308,9 @@ func parseDirArgs(s string) []map[string]string {
 
 // ctlExposed 用 MCP token 调 list_exposed_accounts，输出 agent 视角的暴露面。
 func ctlExposed() int {
-	token := os.Getenv("SAL_MCP_TOKEN")
+	token := os.Getenv("DG_MCP_TOKEN")
 	if token == "" {
-		fmt.Fprintln(os.Stderr, "ctl exposed: SAL_MCP_TOKEN must be set")
+		fmt.Fprintln(os.Stderr, "ctl exposed: DG_MCP_TOKEN must be set")
 		return 2
 	}
 	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_exposed_accounts","arguments":{}}}`
@@ -374,10 +374,10 @@ func ctlExposed() int {
 const ctlUsage = `ctl — manage a running DirGate service over its REST API
 
 environment:
-  SAL_SERVER_URL      service base URL (default: derived from SAL_LISTEN_ADDR, http://127.0.0.1:<port>)
-  SAL_ADMIN_USER      admin username (default: admin)
-  SAL_ADMIN_PASSWORD  admin password (required)
-  SAL_MCP_TOKEN       MCP token (only for ` + "`exposed`" + `)
+  DG_SERVER_URL      service base URL (default: derived from DG_LISTEN_ADDR, http://127.0.0.1:<port>)
+  DG_ADMIN_USER      admin username (default: admin)
+  DG_ADMIN_PASSWORD  admin password (required)
+  DG_MCP_TOKEN       MCP token (only for ` + "`exposed`" + `)
 
 commands:
   servers                                                list servers

@@ -1,7 +1,7 @@
 // DirGate i18n：轻量词典切换，语言偏好存 localStorage。
 // 模板里所有面向用户的静态文案用 data-i18n="key" 标记，切换时整页替换文本。
 
-var SAL_I18N = {
+var dgtI18N = {
   en: {
     // 通用
     brand_sub: 'Server Console',
@@ -160,47 +160,47 @@ var SAL_I18N = {
   }
 };
 
-function salLang() {
-  var v = localStorage.getItem('sal_lang');
+function dgtLang() {
+  var v = localStorage.getItem('dg_lang');
   if (v !== 'en' && v !== 'zh') {
     v = (navigator.language || 'zh').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
   }
   return v;
 }
 
-function salT(key) {
-  return (SAL_I18N[salLang()] || SAL_I18N.zh)[key] || SAL_I18N.zh[key] || key;
+function dgtT(key) {
+  return (dgtI18N[dgtLang()] || dgtI18N.zh)[key] || dgtI18N.zh[key] || key;
 }
 
 // 把整页所有 data-i18n 文案替换为当前语言。
-function salApplyI18n(root) {
+function dgtApplyI18n(root) {
   root = root || document;
-  document.documentElement.lang = salLang() === 'zh' ? 'zh' : 'en';
+  document.documentElement.lang = dgtLang() === 'zh' ? 'zh' : 'en';
   var els = root.querySelectorAll('[data-i18n]');
   for (var i = 0; i < els.length; i++) {
-    els[i].textContent = salT(els[i].getAttribute('data-i18n'));
+    els[i].textContent = dgtT(els[i].getAttribute('data-i18n'));
   }
   var phs = root.querySelectorAll('[data-i18n-placeholder]');
   for (var j = 0; j < phs.length; j++) {
-    phs[j].setAttribute('placeholder', salT(phs[j].getAttribute('data-i18n-placeholder')));
+    phs[j].setAttribute('placeholder', dgtT(phs[j].getAttribute('data-i18n-placeholder')));
   }
   var tps = root.querySelectorAll('[data-i18n-title]');
   for (var k = 0; k < tps.length; k++) {
-    tps[k].setAttribute('title', salT(tps[k].getAttribute('data-i18n-title')));
+    tps[k].setAttribute('title', dgtT(tps[k].getAttribute('data-i18n-title')));
   }
 }
 
 // 导航栏语言切换按钮（中文/EN 互切后刷新，文案全部走 data-i18n）。
-function salToggleLang() {
-  localStorage.setItem('sal_lang', salLang() === 'zh' ? 'en' : 'zh');
+function dgtToggleLang() {
+  localStorage.setItem('dg_lang', dgtLang() === 'zh' ? 'en' : 'zh');
   location.reload();
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-  salApplyI18n(document);
+  dgtApplyI18n(document);
   var btn = document.getElementById('lang-toggle');
   if (btn) {
-    btn.textContent = salLang() === 'zh' ? 'EN' : '中文';
-    btn.addEventListener('click', salToggleLang);
+    btn.textContent = dgtLang() === 'zh' ? 'EN' : '中文';
+    btn.addEventListener('click', dgtToggleLang);
   }
 });

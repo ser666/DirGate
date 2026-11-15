@@ -77,7 +77,7 @@
   </section>
 </main>
 <script>
-salSubmit('add-server', '/api/servers', function (fd) {
+dgtSubmit('add-server', '/api/servers', function (fd) {
   return {
     name: fd.get('name'), host: fd.get('host'),
     ssh_port: parseInt(fd.get('ssh_port') || '22', 10),

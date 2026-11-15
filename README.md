@@ -28,7 +28,7 @@ Open `http://localhost:8080/login`: add a server → create or attach accounts (
 
 ```bash
 # Agent side (one call, cache into agent context)
-curl -s -H "Authorization: Bearer $SAL_MCP_TOKEN" \
+curl -s -H "Authorization: Bearer $DG_MCP_TOKEN" \
      -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
      -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_exposed_accounts","arguments":{}}}' \
      http://sal-host:8080/mcp
@@ -44,9 +44,9 @@ Driving Claude Code is one example: run `claude -p "<task>"` inside a granted di
 The same binary ships a `ctl` subcommand that drives a **running** service over its REST API — no UI, no config edits:
 
 ```bash
-export SAL_SERVER_URL=http://127.0.0.1:18080   # or set SAL_LISTEN_ADDR; default http://127.0.0.1:8080
-export SAL_ADMIN_PASSWORD=...                   # admin login
-export SAL_MCP_TOKEN=...                        # only for `exposed`
+export DG_SERVER_URL=http://127.0.0.1:18080   # or set DG_LISTEN_ADDR; default http://127.0.0.1:8080
+export DG_ADMIN_PASSWORD=...                   # admin login
+export DG_MCP_TOKEN=...                        # only for `exposed`
 
 dirgate ctl servers                                       # list servers
 dirgate ctl server-add dev1 10.0.0.5 'root-password' 22 root prod         # add (tag: prod)

@@ -5,10 +5,10 @@ import (
 	"strings"
 )
 
-// LoadDotEnv 从 .env 读取 KEY=VALUE 注入环境变量（路径可用 SAL_ENV_FILE 覆盖）。
+// LoadDotEnv 从 .env 读取 KEY=VALUE 注入环境变量（路径可用 DG_ENV_FILE 覆盖）。
 // 已存在的环境变量不覆盖（真实环境变量优先）；文件不存在属正常情况，静默返回。
 func LoadDotEnv() error {
-	path := os.Getenv("SAL_ENV_FILE")
+	path := os.Getenv("DG_ENV_FILE")
 	if path == "" {
 		path = ".env"
 	}

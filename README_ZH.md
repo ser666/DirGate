@@ -26,7 +26,7 @@
 
 ```bash
 # agent 端（一次调用，缓存到 agent 上下文）
-curl -s -H "Authorization: Bearer $SAL_MCP_TOKEN" \
+curl -s -H "Authorization: Bearer $DG_MCP_TOKEN" \
      -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
      -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_exposed_accounts","arguments":{}}}' \
      http://sal-host:8080/mcp
@@ -42,9 +42,9 @@ sshpass -p '<password>' ssh coder1@10.0.0.5 'cd /data/repo && <任意命令>'
 同一二进制内置 `ctl` 子命令，直接管理**运行中**的服务（走 REST API，无需打开 UI）：
 
 ```bash
-export SAL_SERVER_URL=http://127.0.0.1:18080   # 缺省从 SAL_LISTEN_ADDR 推导（http://127.0.0.1:8080）
-export SAL_ADMIN_PASSWORD=...                   # 管理员密码
-export SAL_MCP_TOKEN=...                        # 仅 exposed 子命令需要
+export DG_SERVER_URL=http://127.0.0.1:18080   # 缺省从 DG_LISTEN_ADDR 推导（http://127.0.0.1:8080）
+export DG_ADMIN_PASSWORD=...                   # 管理员密码
+export DG_MCP_TOKEN=...                        # 仅 exposed 子命令需要
 
 dirgate ctl servers                                       # 列出服务器
 dirgate ctl server-add dev1 10.0.0.5 'root-password' 22 root prod         # 添加（tag: prod）

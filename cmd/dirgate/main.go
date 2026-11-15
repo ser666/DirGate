@@ -30,7 +30,7 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 	if cfg.MCPToken == "" {
-		log.Fatalf("SAL_MCP_TOKEN must be set (static Bearer key for the MCP endpoint)")
+		log.Fatalf("DG_MCP_TOKEN must be set (static Bearer key for the MCP endpoint)")
 	}
 
 	key, err := resolveKey(cfg)
@@ -65,7 +65,7 @@ func main() {
 		log.Printf("listening on %s (TLS)", cfg.ListenAddr)
 		log.Fatal(http.ListenAndServeTLS(cfg.ListenAddr, cfg.TLSCert, cfg.TLSKey, srv.Handler()))
 	}
-	log.Printf("listening on %s (plaintext HTTP — set SAL_TLS_CERT/SAL_TLS_KEY for production)", cfg.ListenAddr)
+	log.Printf("listening on %s (plaintext HTTP — set DG_TLS_CERT/DG_TLS_KEY for production)", cfg.ListenAddr)
 	log.Fatal(http.ListenAndServe(cfg.ListenAddr, srv.Handler()))
 }
 
@@ -86,7 +86,7 @@ func resolveKey(cfg *config.Config) ([]byte, error) {
 	// keyfile 不存在：若数据库已存在，说明此前用 env 密钥（或 keyfile 被删）运行过，
 	// 重新生成会导致旧密文无法解密，因此直接报错。
 	if _, err := os.Stat(filepath.Join(cfg.DataDir, "dirgate.db")); err == nil {
-		return nil, fmt.Errorf("no master key found but database exists in %s; set SAL_MASTER_KEY to the original key", cfg.DataDir)
+		return nil, fmt.Errorf("no master key found but database exists in %s; set DG_MASTER_KEY to the original key", cfg.DataDir)
 	}
 	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		return nil, err

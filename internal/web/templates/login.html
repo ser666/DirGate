@@ -20,7 +20,7 @@ document.getElementById('login').addEventListener('submit', function (e) {
   var fd = new FormData(e.target);
   var msg = document.getElementById('login-msg');
   msg.style.display = 'none';
-  salFetch('POST', '/api/login', { username: fd.get('username'), password: fd.get('password') })
+  dgtFetch('POST', '/api/login', { username: fd.get('username'), password: fd.get('password') })
     .then(function () { location.href = '/'; })
     .catch(function () { msg.style.display = 'block'; });
 });

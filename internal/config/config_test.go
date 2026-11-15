@@ -6,7 +6,7 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
-	t.Setenv("SAL_MASTER_KEY", strings.Repeat("ab", 32)) // 64 hex chars = 32 bytes
+	t.Setenv("DG_MASTER_KEY", strings.Repeat("ab", 32)) // 64 hex chars = 32 bytes
 	c, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -20,7 +20,7 @@ func TestLoadDefaults(t *testing.T) {
 }
 
 func TestMasterKeyBadLength(t *testing.T) {
-	t.Setenv("SAL_MASTER_KEY", "abcd")
+	t.Setenv("DG_MASTER_KEY", "abcd")
 	c, _ := Load()
 	if _, err := c.MasterKeyBytes(); err == nil {
 		t.Fatal("expected error for short key")
@@ -28,11 +28,11 @@ func TestMasterKeyBadLength(t *testing.T) {
 }
 
 func TestTLSCertRequiresKey(t *testing.T) {
-	t.Setenv("SAL_TLS_CERT", "/tmp/cert.pem")
+	t.Setenv("DG_TLS_CERT", "/tmp/cert.pem")
 	if _, err := Load(); err == nil {
 		t.Fatal("expected error when only cert set")
 	}
-	t.Setenv("SAL_TLS_KEY", "/tmp/key.pem")
+	t.Setenv("DG_TLS_KEY", "/tmp/key.pem")
 	if _, err := Load(); err != nil {
 		t.Fatalf("expected ok with both cert+key: %v", err)
 	}

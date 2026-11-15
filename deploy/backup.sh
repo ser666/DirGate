@@ -9,7 +9,7 @@ DATA_DIR="${1:-./data}"
 OUT_DIR="${2:-./backups}"
 
 if [ ! -f "$DATA_DIR/master.key" ]; then
-  echo "error: $DATA_DIR/master.key not found (wrong SAL_DATA_DIR?)" >&2
+  echo "error: $DATA_DIR/master.key not found (wrong DG_DATA_DIR?)" >&2
   exit 1
 fi
 if [ ! -f "$DATA_DIR/dirgate.db" ]; then

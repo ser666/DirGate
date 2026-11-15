@@ -18,11 +18,11 @@ if [ ! -f .env ]; then
   elif [ -r /proc/sys/kernel/random/uuid ]; then
     token="$(cat /proc/sys/kernel/random/uuid)"
   else
-    token="please-set-SAL_MCP_TOKEN"
+    token="please-set-DG_MCP_TOKEN"
   fi
-  sed -i.bak "s|^SAL_MCP_TOKEN=.*|SAL_MCP_TOKEN=${token}|" .env
+  sed -i.bak "s|^DG_MCP_TOKEN=.*|DG_MCP_TOKEN=${token}|" .env
   rm -f .env.bak
-  echo "已生成 .env（SAL_MCP_TOKEN 已随机生成）。按需编辑 .env 后再次运行，或直接继续。"
+  echo "已生成 .env（DG_MCP_TOKEN 已随机生成）。按需编辑 .env 后再次运行，或直接继续。"
 fi
 
 # 2) 构建单二进制

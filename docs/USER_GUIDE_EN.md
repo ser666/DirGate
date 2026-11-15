@@ -88,12 +88,12 @@ DirGate securely exposes **directories across multiple servers to your local age
 ./run.sh
 ```
 
-The script generates `.env` if missing (filling `SAL_MCP_TOKEN` with a random strong value), builds the single binary, and starts it.
+The script generates `.env` if missing (filling `DG_MCP_TOKEN` with a random strong value), builds the single binary, and starts it.
 
 ### 2.2 Manual build & run
 
 ```bash
-cp .env.example .env            # edit as needed; at minimum set SAL_MCP_TOKEN
+cp .env.example .env            # edit as needed; at minimum set DG_MCP_TOKEN
 go build -o dirgate ./cmd/dirgate
 ./dirgate             # reads .env; real environment variables win
 ```
@@ -114,7 +114,7 @@ cp dirgate /usr/local/bin/
 useradd -r -s /usr/sbin/nologin sal
 mkdir -p /var/lib/dirgate && chown sal:sal /var/lib/dirgate
 cp deploy/dirgate.service /etc/systemd/system/
-# put secrets (SAL_MCP_TOKEN etc.) in /etc/dirgate.env (chmod 600)
+# put secrets (DG_MCP_TOKEN etc.) in /etc/dirgate.env (chmod 600)
 systemctl daemon-reload && systemctl enable --now dirgate
 ```
 
@@ -135,7 +135,7 @@ Otherwise `setfacl` fails and the account is marked `error` (reason shown inline
 
 ### 2.6 Port notes
 
-Some corporate host firewalls DROP common web ports such as 8080/8081 (loopback included). If the service is listening but the browser can't reach it, switch to a high port (e.g. `SAL_LISTEN_ADDR=:18080`) before debugging the firewall.
+Some corporate host firewalls DROP common web ports such as 8080/8081 (loopback included). If the service is listening but the browser can't reach it, switch to a high port (e.g. `DG_LISTEN_ADDR=:18080`) before debugging the firewall.
 
 ---
 
@@ -145,9 +145,9 @@ The same binary ships a `ctl` subcommand — manage a **running** service over i
 
 ```bash
 # credentials via environment (keep the password out of scripts)
-export SAL_SERVER_URL=http://127.0.0.1:18080   # default: derived from SAL_LISTEN_ADDR
-export SAL_ADMIN_PASSWORD=...                   # required
-export SAL_MCP_TOKEN=...                        # only for `exposed`
+export DG_SERVER_URL=http://127.0.0.1:18080   # default: derived from DG_LISTEN_ADDR
+export DG_ADMIN_PASSWORD=...                   # required
+export DG_MCP_TOKEN=...                        # only for `exposed`
 
 dirgate ctl servers
 dirgate ctl server-add dev1 10.0.0.5 'root-password' 22 root prod
@@ -170,15 +170,15 @@ Bare `dirgate ctl` prints all commands. Writes go through the same API and audit
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `SAL_LISTEN_ADDR` | No | `:8080` | Listen address |
-| `SAL_DATA_DIR` | No | `./data` | Data directory (SQLite + `master.key` + `admin-password.txt`) |
-| `SAL_MASTER_KEY` | No | auto-generated | 32-byte hex master key encrypting all stored credentials. **Must never change once data exists** (see §10.1) |
-| `SAL_MCP_TOKEN` | **Yes** | — | Static Bearer token for the MCP endpoint |
-| `SAL_ADMIN_USER` | No | `admin` | Admin username |
-| `SAL_ADMIN_PASSWORD` | No | auto-generated | Admin password on first run; if absent a random one is written to `$SAL_DATA_DIR/admin-password.txt` (0600) |
-| `SAL_TLS_CERT` | No | — | TLS certificate path (pair with `SAL_TLS_KEY`) |
-| `SAL_TLS_KEY` | No | — | TLS private key path (pair with `SAL_TLS_CERT`) |
-| `SAL_ENV_FILE` | No | `.env` | Override the `.env` path |
+| `DG_LISTEN_ADDR` | No | `:8080` | Listen address |
+| `DG_DATA_DIR` | No | `./data` | Data directory (SQLite + `master.key` + `admin-password.txt`) |
+| `DG_MASTER_KEY` | No | auto-generated | 32-byte hex master key encrypting all stored credentials. **Must never change once data exists** (see §10.1) |
+| `DG_MCP_TOKEN` | **Yes** | — | Static Bearer token for the MCP endpoint |
+| `DG_ADMIN_USER` | No | `admin` | Admin username |
+| `DG_ADMIN_PASSWORD` | No | auto-generated | Admin password on first run; if absent a random one is written to `$DG_DATA_DIR/admin-password.txt` (0600) |
+| `DG_TLS_CERT` | No | — | TLS certificate path (pair with `DG_TLS_KEY`) |
+| `DG_TLS_KEY` | No | — | TLS private key path (pair with `DG_TLS_CERT`) |
+| `DG_ENV_FILE` | No | `.env` | Override the `.env` path |
 
 > Real environment variables take precedence over `.env`. With TLS set the service listens on HTTPS and session cookies get `Secure`; without it, plaintext HTTP — for production use TLS or a reverse proxy, since admin logins and credentials traverse this channel.
 
@@ -186,12 +186,12 @@ Bare `dirgate ctl` prints all commands. Writes go through the same API and audit
 
 ## 5. First run
 
-1. If `SAL_ADMIN_PASSWORD` is unset, a random admin password is written to `$SAL_DATA_DIR/admin-password.txt` (0600) — never printed to logs/stdout.
-2. If `SAL_MASTER_KEY` is unset, a 32-byte random master key is generated at `$SAL_DATA_DIR/master.key`.
+1. If `DG_ADMIN_PASSWORD` is unset, a random admin password is written to `$DG_DATA_DIR/admin-password.txt` (0600) — never printed to logs/stdout.
+2. If `DG_MASTER_KEY` is unset, a 32-byte random master key is generated at `$DG_DATA_DIR/master.key`.
 3. Open `http://<host>:<port>/login`, sign in with the admin credentials.
 4. Use the **EN/中文** button in the top bar to switch UI language (stored in browser localStorage).
 
-Master key protection: the program refuses anything that could make ciphertext undecryptable — invalid `SAL_MASTER_KEY` format aborts startup; a corrupt-length `master.key` is never overwritten; "keyfile missing but database exists" errors out and demands the original key.
+Master key protection: the program refuses anything that could make ciphertext undecryptable — invalid `DG_MASTER_KEY` format aborts startup; a corrupt-length `master.key` is never overwritten; "keyfile missing but database exists" errors out and demands the original key.
 
 ---
 
@@ -253,7 +253,7 @@ Notes:
 
 ## 9. REST API reference
 
-All `/api/*` (except `/api/login`, `/api/logout`) requires a session (`sal_session` cookie). State-changing methods (POST/PUT/DELETE) additionally require CSRF: send the `sal_csrf` cookie value back in the `X-CSRF-Token` header (the built-in frontend does this automatically; scripts must maintain it themselves).
+All `/api/*` (except `/api/login`, `/api/logout`) requires a session (`dg_session` cookie). State-changing methods (POST/PUT/DELETE) additionally require CSRF: send the `dg_csrf` cookie value back in the `X-CSRF-Token` header (the built-in frontend does this automatically; scripts must maintain it themselves).
 
 ### Auth
 
@@ -309,22 +309,22 @@ Paste this into your MCP client config file (Claude Code `.mcp.json`, Claude Des
     "dirgate": {
       "url": "http://127.0.0.1:18080/mcp",
       "headers": {
-        "Authorization": "Bearer <YOUR_SAL_MCP_TOKEN>"
+        "Authorization": "Bearer <YOUR_DG_MCP_TOKEN>"
       }
     }
   }
 }
 ```
 
-> `<YOUR_SAL_MCP_TOKEN>` is in the server's `.env`; point `url` at the host running DirGate. For stdio-only clients, bridge with a community tool: `npx mcp-remote http://sal-host:18080/mcp --header "Authorization: Bearer <token>"`.
+> `<YOUR_DG_MCP_TOKEN>` is in the server's `.env`; point `url` at the host running DirGate. For stdio-only clients, bridge with a community tool: `npx mcp-remote http://dirgate-host:18080/mcp --header "Authorization: Bearer <token>"`.
 
 ```json
 {
   "mcpServers": {
     "dirgate": {
       "type": "streamableHttp",
-      "url": "http://sal-host:18080/mcp",
-      "headers": { "Authorization": "Bearer <SAL_MCP_TOKEN>" }
+      "url": "http://dirgate-host:18080/mcp",
+      "headers": { "Authorization": "Bearer <DG_MCP_TOKEN>" }
     }
   }
 }
@@ -333,12 +333,12 @@ Paste this into your MCP client config file (Claude Code `.mcp.json`, Claude Des
 ### 10.2 curl smoke test
 
 ```bash
-curl -H "Authorization: Bearer <SAL_MCP_TOKEN>" \
+curl -H "Authorization: Bearer <DG_MCP_TOKEN>" \
      -H "Content-Type: application/json" \
      -H "Accept: application/json, text/event-stream" \
      -X POST \
      -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_exposed_accounts","arguments":{}}}' \
-     http://sal-host:18080/mcp
+     http://dirgate-host:18080/mcp
 ```
 
 Response (only accounts with `exposed_to_agent=1` on `enabled=1` servers that are **not expired**):
@@ -368,7 +368,7 @@ Response (only accounts with `exposed_to_agent=1` on `enabled=1` servers that ar
 
 Every MCP credential-directory fetch writes an audit line (`audit user=agent ip=<source-IP> action=mcp.POST`). The platform can audit **who fetched credentials**; an agent's actual behavior on the server (commands run, files read) depends on the target host's own sshd logging — enable `sshd LogLevel VERBOSE` with syslog collection there.
 
-> The MCP endpoint returns **plaintext credentials** — protect it with a strong `SAL_MCP_TOKEN` and expose it only on trusted networks. On client machines, make sure the service address is in `no_proxy` (corporate proxies hijack 127.0.0.1 / internal requests).
+> The MCP endpoint returns **plaintext credentials** — protect it with a strong `DG_MCP_TOKEN` and expose it only on trusted networks. On client machines, make sure the service address is in `no_proxy` (corporate proxies hijack 127.0.0.1 / internal requests).
 
 ---
 
@@ -376,7 +376,7 @@ Every MCP credential-directory fetch writes an audit line (`audit user=agent ip=
 
 ### 11.1 Master key (handle with care)
 
-- All root/account passwords are encrypted at rest with **AES-256-GCM**; the key comes from `SAL_MASTER_KEY` or `$SAL_DATA_DIR/master.key`.
+- All root/account passwords are encrypted at rest with **AES-256-GCM**; the key comes from `DG_MASTER_KEY` or `$DG_DATA_DIR/master.key`.
 - **Changing the key source / losing the key = permanently losing every stored password.** Guards: invalid format aborts startup; wrong-length keyfile is never overwritten; "keyfile missing but database exists" demands the original key.
 - For production, keep the master key in a secrets manager and inject it explicitly.
 
@@ -428,15 +428,15 @@ The backup contains the SQLite database + `master.key` (+ `admin-password.txt`).
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Service listening but browser can't reach it | host firewall DROPs the port (8080 often blocked by corporate policy) | switch ports: `SAL_LISTEN_ADDR=:18080` |
+| Service listening but browser can't reach it | host firewall DROPs the port (8080 often blocked by corporate policy) | switch ports: `DG_LISTEN_ADDR=:18080` |
 | Account status `error` | unreachable / wrong password / missing directory / no ACL package | fix, then "Re-provision" or call provision |
 | `error` (permission denied) | admin account is non-root without passwordless sudo | configure `NOPASSWD: ALL`, use real root, or switch to plain mode |
 | `host key mismatch` | target fingerprint changed | `reset_host_key` or edit `host` |
 | Plain mode rejects a different username (400) | attach-only allows the admin account itself | only attach the admin account; use root/sudo mode for multiple accounts |
 | Plain mode password change returns 400 | no privilege to chpasswd | run `passwd` on the server, then delete and re-attach the record |
 | MCP call times out / code 000 | client went through a proxy | add the service address to `no_proxy` |
-| `SAL_MCP_TOKEN must be set` | token missing | set it and restart |
-| Decryption failures (`message authentication failed`) | master key changed | restore the original `SAL_MASTER_KEY` / `master.key` |
+| `DG_MCP_TOKEN must be set` | token missing | set it and restart |
+| Decryption failures (`message authentication failed`) | master key changed | restore the original `DG_MASTER_KEY` / `master.key` |
 | Expired account still in MCP | stale cache | MCP filters on every call — just call again |
 
 ---

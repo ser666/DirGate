@@ -21,7 +21,7 @@ User=sal
 Group=sal
 
 ExecStart=/usr/local/bin/dirgate
-# 配置从 EnvironmentFile 读取；SAL_MCP_TOKEN 等敏感值不要写进本单元（世界可读）。
+# 配置从 EnvironmentFile 读取；DG_MCP_TOKEN 等敏感值不要写进本单元（世界可读）。
 EnvironmentFile=-/etc/dirgate.env
 WorkingDirectory=/usr/local/bin
 

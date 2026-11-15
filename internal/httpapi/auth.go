@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	sessionCookie = "sal_session"
-	csrfCookie    = "sal_csrf"
+	sessionCookie = "dg_session"
+	csrfCookie    = "dg_csrf"
 )
 
 func (s *Server) mac(msg string) string {
@@ -86,7 +86,7 @@ func isStateChanging(method string) bool {
 	return false
 }
 
-// csrfValid 用 double-submit cookie 校验 CSRF：请求头 X-CSRF-Token 必须与 sal_csrf cookie 一致。
+// csrfValid 用 double-submit cookie 校验 CSRF：请求头 X-CSRF-Token 必须与 dg_csrf cookie 一致。
 // 攻击者（即便同站子域）无法读取本站的 host-only cookie，因此无法伪造该头。
 func (s *Server) csrfValid(r *http.Request) bool {
 	c, err := r.Cookie(csrfCookie)

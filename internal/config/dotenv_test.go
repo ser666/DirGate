@@ -6,14 +6,14 @@ import (
 )
 
 func TestParseDotEnv(t *testing.T) {
-	const prefix = "SAL_DOTENV_TEST_"
+	const prefix = "DG_DOTENV_TEST_"
 	content := `
 # 注释
-SAL_DOTENV_TEST_A=hello
-SAL_DOTENV_TEST_B="with spaces"
-SAL_DOTENV_TEST_C='single'
-export SAL_DOTENV_TEST_D=1
-SAL_DOTENV_TEST_E=
+DG_DOTENV_TEST_A=hello
+DG_DOTENV_TEST_B="with spaces"
+DG_DOTENV_TEST_C='single'
+export DG_DOTENV_TEST_D=1
+DG_DOTENV_TEST_E=
 `
 	t.Cleanup(func() {
 		for _, k := range []string{"A", "B", "C", "D", "E"} {
@@ -38,7 +38,7 @@ SAL_DOTENV_TEST_E=
 }
 
 func TestParseDotEnvDoesNotOverrideExisting(t *testing.T) {
-	const key = "SAL_DOTENV_TEST_OVERRIDE"
+	const key = "DG_DOTENV_TEST_OVERRIDE"
 	_ = os.Setenv(key, "from-env")
 	t.Cleanup(func() { _ = os.Unsetenv(key) })
 	if err := parseDotEnv(key + "=from-dotenv\n"); err != nil {
@@ -50,12 +50,12 @@ func TestParseDotEnvDoesNotOverrideExisting(t *testing.T) {
 }
 
 func TestParseDotEnvSkipsCommentsAndMalformed(t *testing.T) {
-	content := "# only comment\n   \nNOEQUALS\n=novalue\nSAL_DOTENV_TEST_OK=1\n"
-	t.Cleanup(func() { _ = os.Unsetenv("SAL_DOTENV_TEST_OK") })
+	content := "# only comment\n   \nNOEQUALS\n=novalue\nDG_DOTENV_TEST_OK=1\n"
+	t.Cleanup(func() { _ = os.Unsetenv("DG_DOTENV_TEST_OK") })
 	if err := parseDotEnv(content); err != nil {
 		t.Fatal(err)
 	}
-	if got := os.Getenv("SAL_DOTENV_TEST_OK"); got != "1" {
+	if got := os.Getenv("DG_DOTENV_TEST_OK"); got != "1" {
 		t.Fatalf("got %q want 1", got)
 	}
 }

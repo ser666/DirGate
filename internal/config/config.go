@@ -23,17 +23,17 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("load .env: %w", err)
 	}
 	c := &Config{
-		ListenAddr:    getenv("SAL_LISTEN_ADDR", ":8080"),
-		DataDir:       getenv("SAL_DATA_DIR", "./data"),
-		MasterKeyHex:  os.Getenv("SAL_MASTER_KEY"),
-		MCPToken:      os.Getenv("SAL_MCP_TOKEN"),
-		AdminUser:     getenv("SAL_ADMIN_USER", "admin"),
-		AdminPassword: os.Getenv("SAL_ADMIN_PASSWORD"),
-		TLSCert:       os.Getenv("SAL_TLS_CERT"),
-		TLSKey:        os.Getenv("SAL_TLS_KEY"),
+		ListenAddr:    getenv("DG_LISTEN_ADDR", ":8080"),
+		DataDir:       getenv("DG_DATA_DIR", "./data"),
+		MasterKeyHex:  os.Getenv("DG_MASTER_KEY"),
+		MCPToken:      os.Getenv("DG_MCP_TOKEN"),
+		AdminUser:     getenv("DG_ADMIN_USER", "admin"),
+		AdminPassword: os.Getenv("DG_ADMIN_PASSWORD"),
+		TLSCert:       os.Getenv("DG_TLS_CERT"),
+		TLSKey:        os.Getenv("DG_TLS_KEY"),
 	}
 	if (c.TLSCert == "") != (c.TLSKey == "") {
-		return nil, errors.New("SAL_TLS_CERT and SAL_TLS_KEY must be set together")
+		return nil, errors.New("DG_TLS_CERT and DG_TLS_KEY must be set together")
 	}
 	return c, nil
 }

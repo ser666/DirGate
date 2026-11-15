@@ -120,7 +120,7 @@
   </section>
 </main>
 <script>
-salSubmit('add-account', '/api/servers/{{.Server.ID}}/accounts', function (fd) {
+dgtSubmit('add-account', '/api/servers/{{.Server.ID}}/accounts', function (fd) {
   return {
     username: fd.get('username'), password: fd.get('password'),
     exposed_to_agent: fd.get('exposed_to_agent') === 'on',
