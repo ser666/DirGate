@@ -171,11 +171,11 @@ func runCtl(args []string) int {
 	case "servers":
 		out, err = c.ctlDo("GET", "/api/servers", nil)
 	case "server-add":
-		if len(rest) < 2 {
-			err = fmt.Errorf("usage: ctl server-add <name> <host> [port] [user] [tag]")
+		if len(rest) < 3 {
+			err = fmt.Errorf("usage: ctl server-add <name> <host> <root-password> [port] [user] [tag]")
 			break
 		}
-		in := map[string]any{"name": rest[0], "host": rest[1]}
+		in := map[string]any{"name": rest[0], "host": rest[1], "root_password": rest[2]}
 		if len(rest) > 2 {
 			var port int
 			if _, err := fmt.Sscan(rest[2], &port); err == nil && port > 0 {
@@ -183,10 +183,16 @@ func runCtl(args []string) int {
 			}
 		}
 		if len(rest) > 3 {
-			in["root_user"] = rest[3]
+			var port int
+			if _, e := fmt.Sscan(rest[3], &port); e == nil && port > 0 {
+				in["ssh_port"] = port
+			}
 		}
 		if len(rest) > 4 {
-			in["tag"] = rest[4]
+			in["root_user"] = rest[4]
+		}
+		if len(rest) > 5 {
+			in["tag"] = rest[5]
 		}
 		out, err = c.ctlDo("POST", "/api/servers", in)
 	case "server-test":
@@ -375,7 +381,7 @@ environment:
 
 commands:
   servers                                                list servers
-  server-add <name> <host> [port] [user] [tag]           add a server
+  server-add <name> <host> <root-password> [port] [user] [tag]   add a server
   server-test <server-id>                                connectivity test + tier probe
   server-enable <server-id> <on|off>                     enable / disable (disabled = out of MCP)
   server-del <server-id>                                 delete server (removes all accounts remotely)

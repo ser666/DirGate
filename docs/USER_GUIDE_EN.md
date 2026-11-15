@@ -150,7 +150,7 @@ export SAL_ADMIN_PASSWORD=...                   # required
 export SAL_MCP_TOKEN=...                        # only for `exposed`
 
 server-agent-link ctl servers
-server-agent-link ctl server-add dev1 10.0.0.5 22 root prod
+server-agent-link ctl server-add dev1 10.0.0.5 'root-password' 22 root prod
 server-agent-link ctl server-test <server-id>          # connectivity + root/sudo/plain probe
 server-agent-link ctl server-enable <server-id> off    # pull a whole server out of MCP
 server-agent-link ctl accounts <server-id>

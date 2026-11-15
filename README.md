@@ -47,7 +47,7 @@ export SAL_ADMIN_PASSWORD=...                   # admin login
 export SAL_MCP_TOKEN=...                        # only for `exposed`
 
 server-agent-link ctl servers                                       # list servers
-server-agent-link ctl server-add dev1 10.0.0.5 22 root prod         # add (tag: prod)
+server-agent-link ctl server-add dev1 10.0.0.5 'root-password' 22 root prod         # add (tag: prod)
 server-agent-link ctl server-test <id>                              # probe root/sudo/plain tier
 server-agent-link ctl account-add <id> coder1 'pass' '/data/repo=rw,/logs=ro' '2026-12-31T23:59:59+08:00'
 server-agent-link ctl account-expose <account-id> on                # exposure switch

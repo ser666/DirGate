@@ -47,7 +47,7 @@ export SAL_ADMIN_PASSWORD=...                   # 管理员密码
 export SAL_MCP_TOKEN=...                        # 仅 exposed 子命令需要
 
 server-agent-link ctl servers                                       # 列出服务器
-server-agent-link ctl server-add dev1 10.0.0.5 22 root prod         # 添加（tag: prod）
+server-agent-link ctl server-add dev1 10.0.0.5 'root-password' 22 root prod         # 添加（tag: prod）
 server-agent-link ctl server-test <id>                              # 探测 root/sudo/plain 分级
 server-agent-link ctl account-add <id> coder1 '密码' '/data/repo=rw,/logs=ro' '2026-12-31T23:59:59+08:00'
 server-agent-link ctl account-expose <account-id> on                # 暴露开关
