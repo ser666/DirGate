@@ -12,7 +12,7 @@ data.bak.*/
 *.log
 
 # 构建产物
-/server-agent-link
+/dirgate
 *.exe
 *.test
 /dist/
