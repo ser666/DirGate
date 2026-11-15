@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"serveragentlink/internal/crypto"
+	"dirgate/internal/crypto"
 )
 
 func (s *Store) CreateAccount(ctx context.Context, serverID, username, password string, exposed bool) (*Account, error) {

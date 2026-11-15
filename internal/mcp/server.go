@@ -11,7 +11,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"serveragentlink/internal/store"
+	"dirgate/internal/store"
 )
 
 type accountDTO struct {
@@ -43,7 +43,7 @@ type listAccountsResult struct {
 // NewHandler 构造一个带静态 Bearer 鉴权的 MCP streamable HTTP handler，
 // 暴露 list_exposed_accounts 工具供外部 agent 发现编码账户凭据。
 func NewHandler(st *store.Store, key []byte, token string) (http.Handler, error) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "server-agent-link", Version: "1.0.0"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "dirgate", Version: "1.0.0"}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_exposed_accounts",

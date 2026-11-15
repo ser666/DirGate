@@ -1,14 +1,14 @@
-# ServerAgentLink systemd 单元模板
+# DirGate systemd 单元模板
 # 安装：
-#   1. 把二进制放到 /usr/local/bin/server-agent-link
-#   cp server-agent-link /usr/local/bin/
+#   1. 把二进制放到 /usr/local/bin/dirgate
+#   cp dirgate /usr/local/bin/
 #   2. 复制本单元并按环境修改路径：
-#   cp deploy/server-agent-link.service /etc/systemd/system/
+#   cp deploy/dirgate.service /etc/systemd/system/
 #   3. 启动并设开机自启：
-#   systemctl daemon-reload && systemctl enable --now server-agent-link
+#   systemctl daemon-reload && systemctl enable --now dirgate
 
 [Unit]
-Description=ServerAgentLink (server + coding-account directory for agents)
+Description=DirGate (server + coding-account directory for agents)
 After=network-online.target
 Wants=network-online.target
 
@@ -16,35 +16,35 @@ Wants=network-online.target
 Type=simple
 # 专用非特权账户运行（数据目录属主需一致）：
 #   useradd -r -s /usr/sbin/nologin sal
-#   mkdir -p /var/lib/server-agent-link && chown sal:sal /var/lib/server-agent-link
+#   mkdir -p /var/lib/dirgate && chown sal:sal /var/lib/dirgate
 User=sal
 Group=sal
 
-ExecStart=/usr/local/bin/server-agent-link
+ExecStart=/usr/local/bin/dirgate
 # 配置从 EnvironmentFile 读取；SAL_MCP_TOKEN 等敏感值不要写进本单元（世界可读）。
-EnvironmentFile=-/etc/server-agent-link.env
+EnvironmentFile=-/etc/dirgate.env
 WorkingDirectory=/usr/local/bin
 
 # 数据目录（SQLite + master.key + admin-password.txt）务必纳入备份；
 # 备份必须同时包含 db 与 master.key，二者不配对则密文永久不可解。
-StateDirectory=server-agent-link
+StateDirectory=dirgate
 
 Restart=always
 RestartSec=3
 
 # 日志走 journald；审计行（audit user=... action=...）可用
-#   journalctl -t server-agent-link -g 'audit'
+#   journalctl -t dirgate -g 'audit'
 # 检索。
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=server-agent-link
+SyslogIdentifier=dirgate
 
 # 最小权限加固。
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/var/lib/server-agent-link
+ReadWritePaths=/var/lib/dirgate
 
 [Install]
 WantedBy=multi-user.target

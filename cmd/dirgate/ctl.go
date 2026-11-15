@@ -1,6 +1,6 @@
 package main
 
-// ctl 子命令：通过 REST API 管理运行中的 ServerAgentLink 服务。
+// ctl 子命令：通过 REST API 管理运行中的 DirGate 服务。
 // 复用单二进制（无独立 ctl 分发），所有操作走已部署服务的 HTTP API，
 // 凭据（服务地址、管理员密码）从环境变量或 .env 读取。
 
@@ -119,7 +119,7 @@ func (c *ctlClient) ctlDo(method, path string, in any) (map[string]any, error) {
 
 // runCtl 解析并执行 ctl 子命令。用法：
 //
-//	server-agent-link ctl <command> [args]
+//	dirgate ctl <command> [args]
 //
 // 环境变量：SAL_SERVER_URL（服务地址，默认从 SAL_LISTEN_ADDR 推导）、
 // SAL_ADMIN_USER（默认 admin）、SAL_ADMIN_PASSWORD（登录密码，必填）。
@@ -371,7 +371,7 @@ func ctlExposed() int {
 	return 0
 }
 
-const ctlUsage = `ctl — manage a running ServerAgentLink service over its REST API
+const ctlUsage = `ctl — manage a running DirGate service over its REST API
 
 environment:
   SAL_SERVER_URL      service base URL (default: derived from SAL_LISTEN_ADDR, http://127.0.0.1:<port>)

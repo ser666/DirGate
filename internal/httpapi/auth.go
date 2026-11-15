@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"serveragentlink/internal/crypto"
+	"dirgate/internal/crypto"
 )
 
 const (

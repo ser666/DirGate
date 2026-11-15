@@ -29,7 +29,7 @@ func userVersion(t *testing.T, s *Store) int {
 // 旧库（无 user_version、无 expires_at 列）升级后须可用且数据保留。
 func TestMigrateLegacyDB(t *testing.T) {
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "data", "server-agent-link.db")
+	dbPath := filepath.Join(dir, "data", "dirgate.db")
 	if err := openRawDB(dbPath); err != nil {
 		t.Fatal(err)
 	}

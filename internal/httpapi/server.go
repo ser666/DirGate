@@ -5,9 +5,9 @@ import (
 	"html/template"
 	"net/http"
 
-	"serveragentlink/internal/sshx"
-	"serveragentlink/internal/store"
-	"serveragentlink/internal/web"
+	"dirgate/internal/sshx"
+	"dirgate/internal/store"
+	"dirgate/internal/web"
 )
 
 // userExecutor 是 sshx.Executor 的可注入接口，便于测试用 fake 替身。

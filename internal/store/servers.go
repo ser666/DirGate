@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"serveragentlink/internal/crypto"
+	"dirgate/internal/crypto"
 )
 
 var ErrNotFound = errors.New("not found")

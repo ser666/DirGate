@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"serveragentlink/internal/sshx"
-	"serveragentlink/internal/store"
+	"dirgate/internal/sshx"
+	"dirgate/internal/store"
 )
 
 type serverInput struct {

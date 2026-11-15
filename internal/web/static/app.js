@@ -1,4 +1,4 @@
-// ServerAgentLink 前端辅助逻辑。全部操作走 fetch + double-submit CSRF，无外部 CDN 依赖。
+// DirGate 前端辅助逻辑。全部操作走 fetch + double-submit CSRF，无外部 CDN 依赖。
 
 function salCookie(name) {
   var m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));

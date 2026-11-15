@@ -1,10 +1,10 @@
-# ServerAgentLink User Guide
+# DirGate User Guide
 
 > Complete operations manual for administrators. For a quick overview see the [README](../README.md).
 
 [English](../README.md) · English Guide · [中文说明](../README_ZH.md) · [中文指南](使用说明.md)
 
-ServerAgentLink securely exposes **directories across multiple servers to your local agents**: register servers on the platform, provision (or attach) real OS accounts, grant per-directory read-only / read-write ACLs, and serve the exposed credentials to any MCP-capable personal agent (coclaw, hermes, etc.). Agents then work **only inside** granted directories — coding, inspecting logs, editing configs — while anything beyond the boundary is rejected at the OS level.
+DirGate securely exposes **directories across multiple servers to your local agents**: register servers on the platform, provision (or attach) real OS accounts, grant per-directory read-only / read-write ACLs, and serve the exposed credentials to any MCP-capable personal agent (coclaw, hermes, etc.). Agents then work **only inside** granted directories — coding, inspecting logs, editing configs — while anything beyond the boundary is rejected at the OS level.
 
 **Authorization is the boundary**: agents receive a set of least-privilege OS accounts, never root; real access control is enforced by POSIX ACLs on the servers, and the platform only handles provisioning and revocation. The platform itself is **not** a task broker and does **not** manage Anthropic API keys — driving Claude Code (`claude -p "<task>"` inside a granted directory) is just one use among many; the platform neither knows nor limits what runs there.
 
@@ -47,7 +47,7 @@ ServerAgentLink securely exposes **directories across multiple servers to your l
 
 ```
 ┌─────────────┐        ┌──────────────────────────────────────────┐
-│   Browser    │  HTTP  │  ServerAgentLink (single Go binary)      │
+│   Browser    │  HTTP  │  DirGate (single Go binary)      │
 │  (Web UI)    ├───────►│                                          │
 └─────────────┘        │  Web UI (embedded templates) → REST API  │
                        │        │                  │               │
@@ -94,34 +94,34 @@ The script generates `.env` if missing (filling `SAL_MCP_TOKEN` with a random st
 
 ```bash
 cp .env.example .env            # edit as needed; at minimum set SAL_MCP_TOKEN
-go build -o server-agent-link ./cmd/server-agent-link
-./server-agent-link             # reads .env; real environment variables win
+go build -o dirgate ./cmd/dirgate
+./dirgate             # reads .env; real environment variables win
 ```
 
 ### 2.3 Cross-compile for machines without Go
 
 ```bash
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o server-agent-link ./cmd/server-agent-link
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dirgate ./cmd/dirgate
 # copy the binary to the target machine, provide .env, run
 ```
 
 ### 2.4 systemd production deployment
 
-The unit template lives at [deploy/server-agent-link.service](../deploy/server-agent-link.service):
+The unit template lives at [deploy/dirgate.service](../deploy/dirgate.service):
 
 ```bash
-cp server-agent-link /usr/local/bin/
+cp dirgate /usr/local/bin/
 useradd -r -s /usr/sbin/nologin sal
-mkdir -p /var/lib/server-agent-link && chown sal:sal /var/lib/server-agent-link
-cp deploy/server-agent-link.service /etc/systemd/system/
-# put secrets (SAL_MCP_TOKEN etc.) in /etc/server-agent-link.env (chmod 600)
-systemctl daemon-reload && systemctl enable --now server-agent-link
+mkdir -p /var/lib/dirgate && chown sal:sal /var/lib/dirgate
+cp deploy/dirgate.service /etc/systemd/system/
+# put secrets (SAL_MCP_TOKEN etc.) in /etc/dirgate.env (chmod 600)
+systemctl daemon-reload && systemctl enable --now dirgate
 ```
 
 The unit ships with auto-restart, `ProtectSystem=strict` hardening, and journald logging. Audit trail:
 
 ```bash
-journalctl -t server-agent-link -g audit
+journalctl -t dirgate -g audit
 ```
 
 ### 2.5 Target server prerequisites
@@ -149,22 +149,22 @@ export SAL_SERVER_URL=http://127.0.0.1:18080   # default: derived from SAL_LISTE
 export SAL_ADMIN_PASSWORD=...                   # required
 export SAL_MCP_TOKEN=...                        # only for `exposed`
 
-server-agent-link ctl servers
-server-agent-link ctl server-add dev1 10.0.0.5 'root-password' 22 root prod
-server-agent-link ctl server-test <server-id>          # connectivity + root/sudo/plain probe
-server-agent-link ctl server-enable <server-id> off    # pull a whole server out of MCP
-server-agent-link ctl accounts <server-id>
-server-agent-link ctl account-add <server-id> coder1 'pass' '/data/repo=rw,/logs=ro' '2026-12-31T23:59:59+08:00'
-server-agent-link ctl account-expose <account-id> on
-server-agent-link ctl account-expiry <account-id> never
-server-agent-link ctl account-perms <account-id> '/data/repo=rw'
-server-agent-link ctl account-passwd <account-id> 'newpass'
-server-agent-link ctl account-provision <account-id>
-server-agent-link ctl account-del <account-id>
-server-agent-link ctl exposed                          # agent's view of the MCP directory (passwords masked)
+dirgate ctl servers
+dirgate ctl server-add dev1 10.0.0.5 'root-password' 22 root prod
+dirgate ctl server-test <server-id>          # connectivity + root/sudo/plain probe
+dirgate ctl server-enable <server-id> off    # pull a whole server out of MCP
+dirgate ctl accounts <server-id>
+dirgate ctl account-add <server-id> coder1 'pass' '/data/repo=rw,/logs=ro' '2026-12-31T23:59:59+08:00'
+dirgate ctl account-expose <account-id> on
+dirgate ctl account-expiry <account-id> never
+dirgate ctl account-perms <account-id> '/data/repo=rw'
+dirgate ctl account-passwd <account-id> 'newpass'
+dirgate ctl account-provision <account-id>
+dirgate ctl account-del <account-id>
+dirgate ctl exposed                          # agent's view of the MCP directory (passwords masked)
 ```
 
-Bare `server-agent-link ctl` prints all commands. Writes go through the same API and audit trail as the Web UI.
+Bare `dirgate ctl` prints all commands. Writes go through the same API and audit trail as the Web UI.
 
 ## 4. Environment variables
 
@@ -223,7 +223,7 @@ Master key protection: the program refuses anything that could make ciphertext u
 | `sudo` | passwordless sudo (NOPASSWD) | ✅ via sudo | ✅ any directory | ✅ same | ✅ same | ✅ |
 | `plain` | regular account, no privileges | ❌ attach only | ✅ owned directories only | ✅ revoke all granted ACLs | ✅ revoke ACLs + delete record (**OS user kept**) | ❌ run `passwd` on the server |
 
-**Why plain mode exists**: on shared servers you often hold only a regular dev account with no root. ServerAgentLink still works — attach your own account, ACL-isolate directories you own, and serve credentials to your agent via MCP. The kernel rejects anything beyond owned directories (`setfacl` on others' directories simply fails), a natural backstop.
+**Why plain mode exists**: on shared servers you often hold only a regular dev account with no root. DirGate still works — attach your own account, ACL-isolate directories you own, and serve credentials to your agent via MCP. The kernel rejects anything beyond owned directories (`setfacl` on others' directories simply fails), a natural backstop.
 
 Notes:
 - In plain mode the account username must equal the admin account; anything else gets HTTP 400.
@@ -306,7 +306,7 @@ Paste this into your MCP client config file (Claude Code `.mcp.json`, Claude Des
 ```json
 {
   "mcpServers": {
-    "server-agent-link": {
+    "dirgate": {
       "url": "http://127.0.0.1:18080/mcp",
       "headers": {
         "Authorization": "Bearer <YOUR_SAL_MCP_TOKEN>"
@@ -316,12 +316,12 @@ Paste this into your MCP client config file (Claude Code `.mcp.json`, Claude Des
 }
 ```
 
-> `<YOUR_SAL_MCP_TOKEN>` is in the server's `.env`; point `url` at the host running ServerAgentLink. For stdio-only clients, bridge with a community tool: `npx mcp-remote http://sal-host:18080/mcp --header "Authorization: Bearer <token>"`.
+> `<YOUR_SAL_MCP_TOKEN>` is in the server's `.env`; point `url` at the host running DirGate. For stdio-only clients, bridge with a community tool: `npx mcp-remote http://sal-host:18080/mcp --header "Authorization: Bearer <token>"`.
 
 ```json
 {
   "mcpServers": {
-    "server-agent-link": {
+    "dirgate": {
       "type": "streamableHttp",
       "url": "http://sal-host:18080/mcp",
       "headers": { "Authorization": "Bearer <SAL_MCP_TOKEN>" }
@@ -409,7 +409,7 @@ audit user=admin ip=10.0.0.2 action=account.create object=<id> <username>
 Covered actions: `server.create/update/delete`, `account.create/update/delete/permissions/password/provision`, system reclamation `account.lock`, and MCP fetches `mcp.POST`. Retrieve with:
 
 ```bash
-journalctl -t server-agent-link -g audit
+journalctl -t dirgate -g audit
 ```
 
 ---

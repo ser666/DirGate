@@ -1,4 +1,4 @@
-// ServerAgentLink i18n：轻量词典切换，语言偏好存 localStorage。
+// DirGate i18n：轻量词典切换，语言偏好存 localStorage。
 // 模板里所有面向用户的静态文案用 data-i18n="key" 标记，切换时整页替换文本。
 
 var SAL_I18N = {
@@ -7,7 +7,7 @@ var SAL_I18N = {
     brand_sub: 'Server Console',
     logout: 'Sign out',
     login: 'Sign in',
-    login_sub: 'ServerAgentLink · Server Console',
+    login_sub: 'DirGate · Server Console',
     username: 'Username',
     password: 'Password',
     login_failed: 'Invalid username or password',
@@ -86,7 +86,7 @@ var SAL_I18N = {
     brand_sub: '服务器接线台',
     logout: '退出',
     login: '登录',
-    login_sub: 'ServerAgentLink · 服务器接线台',
+    login_sub: 'DirGate · 服务器接线台',
     username: '用户名',
     password: '密码',
     login_failed: '用户名或密码错误',

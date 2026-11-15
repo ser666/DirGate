@@ -1,4 +1,4 @@
-# ServerAgentLink
+# DirGate
 
 **单个静态二进制。零外部依赖。拷贝即跑。**
 把多台服务器的目录安全地暴露给本地 agent —— OS 账户供给 + 逐目录 ACL 授权 + MCP 凭据目录。
@@ -7,7 +7,7 @@
 
 ## 为什么
 
-本地助理 agent 常要同时跨多台服务器工作（读写代码仓、查日志、改配置），但直接把 root 密码交给 agent 既危险又无法审计。ServerAgentLink 是这件事的**权限底座**：
+本地助理 agent 常要同时跨多台服务器工作（读写代码仓、查日志、改配置），但直接把 root 密码交给 agent 既危险又无法审计。DirGate 是这件事的**权限底座**：
 
 - 管理员在 Web UI 里登记服务器，为 agent 批量创建**最小权限 OS 账户**，按目录授予 `rw`/`ro` ACL；
 - agent 通过一个 MCP 工具拿到全部被授权的「服务器 + 账户 + 目录清单」，**且仅在**授权目录内工作——越界访问在 OS 层被拒绝；
@@ -46,15 +46,15 @@ export SAL_SERVER_URL=http://127.0.0.1:18080   # 缺省从 SAL_LISTEN_ADDR 推�
 export SAL_ADMIN_PASSWORD=...                   # 管理员密码
 export SAL_MCP_TOKEN=...                        # 仅 exposed 子命令需要
 
-server-agent-link ctl servers                                       # 列出服务器
-server-agent-link ctl server-add dev1 10.0.0.5 'root-password' 22 root prod         # 添加（tag: prod）
-server-agent-link ctl server-test <id>                              # 探测 root/sudo/plain 分级
-server-agent-link ctl account-add <id> coder1 '密码' '/data/repo=rw,/logs=ro' '2026-12-31T23:59:59+08:00'
-server-agent-link ctl account-expose <account-id> on                # 暴露开关
-server-agent-link ctl exposed                                       # agent 视角（密码打码）
+dirgate ctl servers                                       # 列出服务器
+dirgate ctl server-add dev1 10.0.0.5 'root-password' 22 root prod         # 添加（tag: prod）
+dirgate ctl server-test <id>                              # 探测 root/sudo/plain 分级
+dirgate ctl account-add <id> coder1 '密码' '/data/repo=rw,/logs=ro' '2026-12-31T23:59:59+08:00'
+dirgate ctl account-expose <account-id> on                # 暴露开关
+dirgate ctl exposed                                       # agent 视角（密码打码）
 ```
 
-`server-agent-link ctl` 打印全部 14 个命令。所有写操作与 Web UI 走同一 API 与审计。完整参考见[使用说明](docs/使用说明.md)的「命令行管理（CLI）」章节。
+`dirgate ctl` 打印全部 14 个命令。所有写操作与 Web UI 走同一 API 与审计。完整参考见[使用说明](docs/使用说明.md)的「命令行管理（CLI）」章节。
 
 ## 特性
 

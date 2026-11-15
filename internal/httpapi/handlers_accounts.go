@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"serveragentlink/internal/sshx"
-	"serveragentlink/internal/store"
+	"dirgate/internal/sshx"
+	"dirgate/internal/store"
 )
 
 var (

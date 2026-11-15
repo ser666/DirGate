@@ -1,4 +1,4 @@
-module serveragentlink
+module dirgate
 
 go 1.26.5
 

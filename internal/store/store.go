@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	crypto "serveragentlink/internal/crypto"
+	crypto "dirgate/internal/crypto"
 
 	_ "modernc.org/sqlite"
 )
@@ -19,7 +19,7 @@ func Open(dataDir string, key []byte) (*Store, error) {
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return nil, err
 	}
-	dsn := "file:" + filepath.Join(dataDir, "server-agent-link.db") + "?_pragma=foreign_keys(1)"
+	dsn := "file:" + filepath.Join(dataDir, "dirgate.db") + "?_pragma=foreign_keys(1)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err

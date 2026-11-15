@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"serveragentlink/internal/crypto"
-	"serveragentlink/internal/store"
+	"dirgate/internal/crypto"
+	"dirgate/internal/store"
 )
 
 func newTestServer(t *testing.T) *Server {

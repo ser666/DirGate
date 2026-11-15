@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"serveragentlink/internal/store"
+	"dirgate/internal/store"
 )
 
 func newHandler(t *testing.T) (http.Handler, *store.Store) {

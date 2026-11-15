@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ServerAgentLink 一键启动脚本：生成 .env（若缺省）→ 构建 → 运行。
+# DirGate 一键启动脚本：生成 .env（若缺省）→ 构建 → 运行。
 # 用法：./run.sh
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -26,9 +26,9 @@ if [ ! -f .env ]; then
 fi
 
 # 2) 构建单二进制
-echo "构建 server-agent-link ..."
-go build -o server-agent-link ./cmd/server-agent-link
+echo "构建 dirgate ..."
+go build -o dirgate ./cmd/dirgate
 
 # 3) 启动（程序自身会读取 .env；真实环境变量优先于 .env）
-echo "启动 ServerAgentLink ..."
-exec ./server-agent-link
+echo "启动 DirGate ..."
+exec ./dirgate

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"serveragentlink/internal/store"
+	"dirgate/internal/store"
 )
 
 type serverView struct {

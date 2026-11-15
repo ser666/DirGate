@@ -1,4 +1,4 @@
-# ServerAgentLink
+# DirGate
 
 **A single static binary. Zero external dependencies. Copy and run.**
 Securely expose directories across multiple servers to your local agents — OS account provisioning + per-directory ACL grants + an MCP credential directory.
@@ -7,7 +7,7 @@ English · [English Guide](docs/USER_GUIDE_EN.md) · [中文说明](README_ZH.md
 
 ## Why
 
-Local assistant agents often work across many servers at once (read/write repos, inspect logs, edit configs) — but handing them a root password is unsafe and unauditable. ServerAgentLink is the **permission foundation** for that workflow:
+Local assistant agents often work across many servers at once (read/write repos, inspect logs, edit configs) — but handing them a root password is unsafe and unauditable. DirGate is the **permission foundation** for that workflow:
 
 - Admins register servers in a Web UI, provision **least-privilege OS accounts** for agents, and grant per-directory `rw`/`ro` ACLs;
 - Agents fetch the full "server + account + directory list" through a single MCP tool, then work **only inside** granted directories — anything beyond the boundary is rejected at the OS level;
@@ -46,15 +46,15 @@ export SAL_SERVER_URL=http://127.0.0.1:18080   # or set SAL_LISTEN_ADDR; default
 export SAL_ADMIN_PASSWORD=...                   # admin login
 export SAL_MCP_TOKEN=...                        # only for `exposed`
 
-server-agent-link ctl servers                                       # list servers
-server-agent-link ctl server-add dev1 10.0.0.5 'root-password' 22 root prod         # add (tag: prod)
-server-agent-link ctl server-test <id>                              # probe root/sudo/plain tier
-server-agent-link ctl account-add <id> coder1 'pass' '/data/repo=rw,/logs=ro' '2026-12-31T23:59:59+08:00'
-server-agent-link ctl account-expose <account-id> on                # exposure switch
-server-agent-link ctl exposed                                       # agent's view (passwords masked)
+dirgate ctl servers                                       # list servers
+dirgate ctl server-add dev1 10.0.0.5 'root-password' 22 root prod         # add (tag: prod)
+dirgate ctl server-test <id>                              # probe root/sudo/plain tier
+dirgate ctl account-add <id> coder1 'pass' '/data/repo=rw,/logs=ro' '2026-12-31T23:59:59+08:00'
+dirgate ctl account-expose <account-id> on                # exposure switch
+dirgate ctl exposed                                       # agent's view (passwords masked)
 ```
 
-`server-agent-link ctl` prints all 14 commands. Writes share the same API and audit trail as the Web UI. Full reference: the CLI section in the [Guide](docs/USER_GUIDE_EN.md).
+`dirgate ctl` prints all 14 commands. Writes share the same API and audit trail as the Web UI. Full reference: the CLI section in the [Guide](docs/USER_GUIDE_EN.md).
 
 ## Features
 

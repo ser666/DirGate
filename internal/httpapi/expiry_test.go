@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"serveragentlink/internal/store"
+	"dirgate/internal/store"
 )
 
 // sweepExpired 应锁定到期账户：调 LockUser、置 status=locked，且锁定后不再重复处理。

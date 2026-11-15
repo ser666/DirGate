@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"serveragentlink/internal/store"
+	"dirgate/internal/store"
 )
 
 func TestCreateAndListServers(t *testing.T) {

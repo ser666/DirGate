@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"serveragentlink/internal/store"
+	"dirgate/internal/store"
 )
 
 //go:embed templates static

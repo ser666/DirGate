@@ -8,8 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"serveragentlink/internal/sshx"
-	"serveragentlink/internal/store"
+	"dirgate/internal/sshx"
+	"dirgate/internal/store"
 )
 
 type fakeExec struct {
