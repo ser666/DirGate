@@ -3,7 +3,7 @@
 **单个静态二进制。零外部依赖。拷贝即跑。**
 把多台服务器的目录安全地暴露给本地 agent —— OS 账户供给 + 逐目录 ACL 授权 + MCP 凭据目录。
 
-[English](README.md) · [使用说明](docs/使用说明.md)
+[English](README.md) · [User Guide](docs/USER_GUIDE_EN.md)
 
 ## 为什么
 

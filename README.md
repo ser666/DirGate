@@ -3,7 +3,7 @@
 **A single static binary. Zero external dependencies. Copy and run.**
 Securely expose directories across multiple servers to your local agents — OS account provisioning + per-directory ACL grants + an MCP credential directory.
 
-[中文](README_ZH.md) · [Guide (Chinese)](docs/使用说明.md)
+[中文说明](README_ZH.md) · [中文指南](docs/使用说明.md)
 
 ## Why
 
