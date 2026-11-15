@@ -12,18 +12,18 @@ ServerAgentLink securely exposes **directories across multiple servers to your l
 
 1. [Concepts & architecture](#1-concepts--architecture)
 2. [Installation & deployment](#2-installation--deployment)
-3. [Environment variables](#3-environment-variables)
-4. [First run](#4-first-run)
-5. [Web UI workflow](#5-web-ui-workflow)
-6. [Access-mode tiers (root / sudo / plain)](#6-access-mode-tiers-root--sudo--plain)
-7. [Account expiry & reclamation](#7-account-expiry--reclamation)
-8. [REST API reference](#8-rest-api-reference)
-9. [MCP onboarding (agent side)](#9-mcp-onboarding-agent-side)
-10. [Security model & operations](#10-security-model--operations)
-11. [Backup & restore](#11-backup--restore)
-12. [Troubleshooting](#12-troubleshooting)
-13. [Testing](#13-testing)
-14. [Explicit non-goals](#14-explicit-non-goals)
+3. [CLI management](#3-cli-management)
+4. [Environment variables](#4-environment-variables)
+5. [First run](#5-first-run)
+6. [Web UI workflow](#6-web-ui-workflow)
+7. [Access-mode tiers (root / sudo / plain)](#7-access-mode-tiers-root--sudo--plain)
+8. [Account expiry & reclamation](#8-account-expiry--reclamation)
+9. [REST API reference](#9-rest-api-reference)
+10. [MCP onboarding (agent side)](#10-mcp-onboarding-agent-side)
+11. [Security model & operations](#11-security-model--operations)
+12. [Backup & restore](#12-backup--restore)
+13. [Troubleshooting](#13-troubleshooting)
+14. [Testing](#14-testing)
 
 ---
 
@@ -137,7 +137,34 @@ Some corporate host firewalls DROP common web ports such as 8080/8081 (loopback 
 
 ---
 
-## 3. Environment variables
+## 3. CLI management
+
+The same binary ships a `ctl` subcommand — manage a **running** service over its REST API, no config edits, no local data directory:
+
+```bash
+# credentials via environment (keep the password out of scripts)
+export SAL_SERVER_URL=http://127.0.0.1:18080   # default: derived from SAL_LISTEN_ADDR
+export SAL_ADMIN_PASSWORD=...                   # required
+export SAL_MCP_TOKEN=...                        # only for `exposed`
+
+server-agent-link ctl servers
+server-agent-link ctl server-add dev1 10.0.0.5 22 root prod
+server-agent-link ctl server-test <server-id>          # connectivity + root/sudo/plain probe
+server-agent-link ctl server-enable <server-id> off    # pull a whole server out of MCP
+server-agent-link ctl accounts <server-id>
+server-agent-link ctl account-add <server-id> coder1 'pass' '/data/repo=rw,/logs=ro' '2026-12-31T23:59:59+08:00'
+server-agent-link ctl account-expose <account-id> on
+server-agent-link ctl account-expiry <account-id> never
+server-agent-link ctl account-perms <account-id> '/data/repo=rw'
+server-agent-link ctl account-passwd <account-id> 'newpass'
+server-agent-link ctl account-provision <account-id>
+server-agent-link ctl account-del <account-id>
+server-agent-link ctl exposed                          # agent's view of the MCP directory (passwords masked)
+```
+
+Bare `server-agent-link ctl` prints all commands. Writes go through the same API and audit trail as the Web UI.
+
+## 4. Environment variables
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
@@ -155,7 +182,7 @@ Some corporate host firewalls DROP common web ports such as 8080/8081 (loopback 
 
 ---
 
-## 4. First run
+## 5. First run
 
 1. If `SAL_ADMIN_PASSWORD` is unset, a random admin password is written to `$SAL_DATA_DIR/admin-password.txt` (0600) — never printed to logs/stdout.
 2. If `SAL_MASTER_KEY` is unset, a 32-byte random master key is generated at `$SAL_DATA_DIR/master.key`.
@@ -166,7 +193,7 @@ Master key protection: the program refuses anything that could make ciphertext u
 
 ---
 
-## 5. Web UI workflow
+## 6. Web UI workflow
 
 1. **Sign in** at `/login`.
 2. **Add a server**: fill name, host, SSH port (default 22), admin username (default root), password.
@@ -184,7 +211,7 @@ Master key protection: the program refuses anything that could make ciphertext u
 
 ---
 
-## 6. Access-mode tiers (root / sudo / plain)
+## 7. Access-mode tiers (root / sudo / plain)
 
 "Test Connection" probes the admin account's real capabilities; the detected `access_mode` determines the provisioning path:
 
@@ -203,7 +230,7 @@ Notes:
 
 ---
 
-## 7. Account expiry & reclamation
+## 8. Account expiry & reclamation
 
 ### 7.1 How it works
 
@@ -222,7 +249,7 @@ Notes:
 
 ---
 
-## 8. REST API reference
+## 9. REST API reference
 
 All `/api/*` (except `/api/login`, `/api/logout`) requires a session (`sal_session` cookie). State-changing methods (POST/PUT/DELETE) additionally require CSRF: send the `sal_csrf` cookie value back in the `X-CSRF-Token` header (the built-in frontend does this automatically; scripts must maintain it themselves).
 
@@ -266,11 +293,28 @@ Field values:
 
 ---
 
-## 9. MCP onboarding (agent side)
+## 10. MCP onboarding (agent side)
 
 The MCP service is **streamable HTTP** at `/mcp`, static Bearer auth, one read-only tool.
 
-### 9.1 Generic client config
+### 10.1 Mount directly in your MCP client config
+
+Paste this into your MCP client config file (Claude Code `.mcp.json`, Claude Desktop `claude_desktop_config.json`, etc. — key names vary slightly per client):
+
+```json
+{
+  "mcpServers": {
+    "server-agent-link": {
+      "url": "http://127.0.0.1:18080/mcp",
+      "headers": {
+        "Authorization": "Bearer <YOUR_SAL_MCP_TOKEN>"
+      }
+    }
+  }
+}
+```
+
+> `<YOUR_SAL_MCP_TOKEN>` is in the server's `.env`; point `url` at the host running ServerAgentLink. For stdio-only clients, bridge with a community tool: `npx mcp-remote http://sal-host:18080/mcp --header "Authorization: Bearer <token>"`.
 
 ```json
 {
@@ -284,7 +328,7 @@ The MCP service is **streamable HTTP** at `/mcp`, static Bearer auth, one read-o
 }
 ```
 
-### 9.2 curl smoke test
+### 10.2 curl smoke test
 
 ```bash
 curl -H "Authorization: Bearer <SAL_MCP_TOKEN>" \
@@ -310,7 +354,7 @@ Response (only accounts with `exposed_to_agent=1` on `enabled=1` servers that ar
 }
 ```
 
-### 9.3 Agent conventions
+### 10.3 Agent conventions
 
 - Work **only inside** the listed `directories`. Mind the grant granularity: it covers the **whole subtree** — `ro` (ACL `rx`) allows reading, traversing, and executing files already present; `rw` allows writes. There is no per-subpath exclusion, so check a subtree's contents before granting.
 - Route across servers by `tag` (prod / test / project name) or `server_name + host`; each account's password is independent.
@@ -318,7 +362,7 @@ Response (only accounts with `exposed_to_agent=1` on `enabled=1` servers that ar
 - **Self-aware expiry**: `expires_at` ships with each account (empty = never). Agents can judge their usable window and avoid retrying dead credentials.
 - **OS-layer lag**: after expiry the MCP directory updates instantly, but the remote OS lock runs on the background reaper (10-minute scan) — old credentials may still log in for up to 10 minutes. This is by design.
 
-### 9.4 Access audit
+### 10.4 Access audit
 
 Every MCP credential-directory fetch writes an audit line (`audit user=agent ip=<source-IP> action=mcp.POST`). The platform can audit **who fetched credentials**; an agent's actual behavior on the server (commands run, files read) depends on the target host's own sshd logging — enable `sshd LogLevel VERBOSE` with syslog collection there.
 
@@ -326,33 +370,33 @@ Every MCP credential-directory fetch writes an audit line (`audit user=agent ip=
 
 ---
 
-## 10. Security model & operations
+## 11. Security model & operations
 
-### 10.1 Master key (handle with care)
+### 11.1 Master key (handle with care)
 
 - All root/account passwords are encrypted at rest with **AES-256-GCM**; the key comes from `SAL_MASTER_KEY` or `$SAL_DATA_DIR/master.key`.
 - **Changing the key source / losing the key = permanently losing every stored password.** Guards: invalid format aborts startup; wrong-length keyfile is never overwritten; "keyfile missing but database exists" demands the original key.
 - For production, keep the master key in a secrets manager and inject it explicitly.
 
-### 10.2 SSH host fingerprints (TOFU)
+### 11.2 SSH host fingerprints (TOFU)
 
 - The first successful connection records the target's SHA256 fingerprint; every later connection verifies it, and a mismatch is rejected (MITM protection).
 - After a host migration/reinstall: `PUT /api/servers/{id}` with `"reset_host_key": true`, or edit the `host` field (clears the fingerprint automatically).
 
-### 10.3 SSH escalation (sudo)
+### 11.3 SSH escalation (sudo)
 
 - The platform SSHes in as the registered admin account to run `useradd`/`chpasswd`/`setfacl`/`userdel`.
 - Non-root (uid≠0) automatically escalates with `sudo -n`, requiring `NOPASSWD: ALL` in sudoers — otherwise it fails immediately (account marked `error`).
 - True root skips sudo; plain mode uses no privileged operations at all.
 
-### 10.4 Login & CSRF
+### 11.4 Login & CSRF
 
 - Admin passwords are argon2id-hashed, never stored in plaintext.
 - Sessions are HMAC-SHA256-signed cookies (`HttpOnly`, `SameSite=Strict`, `Secure` under TLS).
 - Login rate limiting: 5 attempts/min/IP (atomic counting, `X-Forwarded-For` is not trusted).
 - State-changing endpoints enforce double-submit CSRF.
 
-### 10.5 Audit
+### 11.5 Audit
 
 State-changing operations write one structured line to stdout (journald under systemd):
 
@@ -368,7 +412,7 @@ journalctl -t server-agent-link -g audit
 
 ---
 
-## 11. Backup & restore
+## 12. Backup & restore
 
 ```bash
 ./deploy/backup.sh [data-dir] [output-dir]     # defaults: ./data ./backups
@@ -378,7 +422,7 @@ The backup contains the SQLite database + `master.key` (+ `admin-password.txt`).
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
@@ -395,19 +439,10 @@ The backup contains the SQLite database + `master.key` (+ `admin-password.txt`).
 
 ---
 
-## 13. Testing
+## 14. Testing
 
 ```bash
 go test ./...                                   # unit tests (54+ cases)
 go test -tags integration ./internal/sshx/      # real sshd integration tests (needs docker, see integration_test.go)
 ```
 
----
-
-## 14. Explicit non-goals
-
-- **No task brokering**: the platform exposes the credential directory and authorization boundary only; agents SSH by themselves and decide what to do inside granted directories.
-- **No Anthropic API key management**: installing Claude Code and configuring URLs/tokens is done manually on the servers.
-- **Single admin**: no multi-user or role hierarchy (audit logging covers intranet self-hosted forensics).
-- **Plaintext HTTP by default**: without TLS, logins and credentials traverse the network in the clear; enable `SAL_TLS_CERT`/`SAL_TLS_KEY` or a reverse proxy in production.
-- **No agent orchestration / worktree fan-out / harness presets / Kubernetes platformization**: orthogonal to orchestration ADEs like orca.

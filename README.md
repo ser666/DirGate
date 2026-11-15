@@ -52,10 +52,6 @@ Driving Claude Code is one example: run `claude -p "<task>"` inside a granted di
 - [deploy/](deploy/) — systemd unit template and backup script
 - [.env.example](.env.example) — annotated configuration reference
 
-## Scope
-
-**Not doing**: task brokering (no agent orchestration), Anthropic API key management, multi-admin/RBAC, Kubernetes platformization.
-**Planned**: multi-cloud instance ingestion, password rotation, server groups, alert notifications.
 
 ## Testing
 

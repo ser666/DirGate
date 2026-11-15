@@ -52,10 +52,6 @@ sshpass -p '<password>' ssh coder1@10.0.0.5 'cd /data/repo && <任意命令>'
 - [deploy/](deploy/)——systemd 单元模板与备份脚本
 - [.env.example](.env.example)——全部配置项注释
 
-## 范围
-
-**不做**：任务代理（不编排 agent）、Anthropic API Key 管理、多管理员/RBAC、K8s 平台化。
-**规划中**：多云实例导入、密码轮换、服务器分组、告警通知。
 
 ## 测试
 

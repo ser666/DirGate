@@ -17,6 +17,14 @@ import (
 )
 
 func main() {
+	// ctl 子命令：管理运行中的服务（需要 .env 里的服务地址/凭据，但不需要本地数据目录）。
+	if len(os.Args) > 1 && os.Args[1] == "ctl" {
+		if err := config.LoadDotEnv(); err != nil {
+			log.Fatalf("config: %v", err)
+		}
+		os.Exit(runCtl(os.Args[2:]))
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config: %v", err)
