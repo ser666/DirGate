@@ -37,6 +37,25 @@ sshpass -p '<password>' ssh coder1@10.0.0.5 'cd /data/repo && <任意命令>'
 
 驱动 Claude Code 是其中一种用法：在授权目录里 `claude -p "任务"` 即可——平台不关心目录里跑什么。
 
+### 或用命令行管理
+
+同一二进制内置 `ctl` 子命令，直接管理**运行中**的服务（走 REST API，无需打开 UI）：
+
+```bash
+export SAL_SERVER_URL=http://127.0.0.1:18080   # 缺省从 SAL_LISTEN_ADDR 推导（http://127.0.0.1:8080）
+export SAL_ADMIN_PASSWORD=...                   # 管理员密码
+export SAL_MCP_TOKEN=...                        # 仅 exposed 子命令需要
+
+server-agent-link ctl servers                                       # 列出服务器
+server-agent-link ctl server-add dev1 10.0.0.5 22 root prod         # 添加（tag: prod）
+server-agent-link ctl server-test <id>                              # 探测 root/sudo/plain 分级
+server-agent-link ctl account-add <id> coder1 '密码' '/data/repo=rw,/logs=ro' '2026-12-31T23:59:59+08:00'
+server-agent-link ctl account-expose <account-id> on                # 暴露开关
+server-agent-link ctl exposed                                       # agent 视角（密码打码）
+```
+
+`server-agent-link ctl` 打印全部 14 个命令。所有写操作与 Web UI 走同一 API 与审计。完整参考见[使用说明](docs/使用说明.md)的「命令行管理（CLI）」章节。
+
 ## 特性
 
 - **真实供给**：`useradd` / `chpasswd` / `setfacl` / `userdel` 真实执行，非 root 管理账户自动 `sudo -n` 提权
